@@ -482,7 +482,7 @@ function save(){
   dirty=true; setStatus('저장 중…');
   clearTimeout(saveT);
   saveT = setTimeout(async()=>{
-    try{ await store.set(KEY, JSON.stringify(S)); dirty=false; setStatus('임시 보관됨 · '+nowT()) }
+    try{ await store.set(KEY, JSON.stringify(S)); dirty=false; setStatus('임시 보관됨 · '+nowT()); prepShare() }
     catch(e){ setStatus('⚠ 임시 보관 실패 — [파일 저장]을 눌러 주세요') }
   }, 350);
 }
@@ -491,7 +491,7 @@ function setStatus(t){ const el=document.getElementById('hSt'); if(el) el.textCo
 window.addEventListener('beforeunload', e=>{ if(dirty){ e.preventDefault(); e.returnValue='' } });
 
 /* ───────── 서버(공유) 저장 ───────── */
-const APPVER = '2026.11';
+const APPVER = '2026.12';
 const LIBKEY = 'church_ledger_lib_v1';
 const DATASHEET = '_data', DATATAG = 'CHURCH_LEDGER_V1';
 const XLSXMIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -539,34 +539,42 @@ function saveFile(){
   srvMsg = `${r.name} 파일로 저장했습니다.` + (window.XLSX?' 공유 폴더에 넣어 두세요.':' (엑셀 변환 준비 전이라 예전 형식으로 저장됨)');
   render();
 }
-function shareFile(){                       // async 를 쓰지 않는다 — 기다리는 사이 공유창이 차단된다
+/* 공유용 파일을 미리 만들어 둔다 — 버튼을 누른 순간에는 아무 작업도 하지 않아야
+   브라우저가 '사용자가 누른 것'으로 인정해 공유창을 열어 준다 */
+let shareBlob=null, shareName='', prepT=null;
+function prepShare(){
+  clearTimeout(prepT);
+  prepT = setTimeout(function(){
+    try{
+      if(ro || !deptName() || !window.XLSX){ shareBlob=null; return }
+      const r = makeBlob(); shareBlob=r.blob; shareName=r.name;
+    }catch(e){ shareBlob=null }
+  }, 500);
+}
+function shareFile(){                       // 이 함수 안에서는 절대 기다리지 않는다
   if(ro){ alert('열람 중인 다른 부서 자료는 공유할 수 없습니다.'); return }
   if(!deptName()){ alert('안내 탭 기본 정보에 작성 부서명을 먼저 입력하세요.'); return }
-  if(!window.XLSX){
-    loadXLSX().catch(function(){});
-    alert('엑셀 변환 준비 중입니다. 2~3초 뒤 다시 눌러 주세요.');
-    return;
+  let blob=shareBlob, nm=shareName;
+  if(!blob){
+    if(!window.XLSX){ loadXLSX().then(prepShare); alert('준비 중입니다. 2~3초 뒤 다시 눌러 주세요.'); return }
+    try{ const r=makeBlob(); blob=r.blob; nm=r.name }
+    catch(e){ alert('파일을 만들지 못했습니다: '+(e&&e.message?e.message:e)); return }
   }
-  let r, f;
-  try{
-    r = makeBlob();
-    f = new File([r.blob], r.name, {type:r.blob.type});
-  }catch(e){ alert('파일을 만들지 못했습니다: ' + (e && e.message ? e.message : e)); return }
-
+  const f = new File([blob], nm, {type:blob.type});
   if(navigator.share && navigator.canShare && navigator.canShare({files:[f]})){
     navigator.share({files:[f]}).then(function(){
-      srvMsg = `${r.name} 파일을 공유했습니다.`; render();
+      srvMsg = `${nm} 파일을 공유했습니다.`; render();
     }).catch(function(err){
       if(err && err.name==='AbortError') return;              // 사용자가 취소한 경우
-      manualShare(r, '공유창이 열리지 않았습니다. (' + (err && err.name ? err.name : '알 수 없음') + ')');
+      manualShare(blob, nm, err && err.name ? err.name : '알 수 없음');
     });
     return;
   }
-  manualShare(r, '이 기기는 파일 공유창을 지원하지 않습니다.');
+  manualShare(blob, nm, '미지원');
 }
-function manualShare(r, why){
-  dl(r.blob, r.name);
-  alert(`${why}\n\n${r.name} 파일을 내려받았습니다.\n\n카카오톡에서 보낼 채팅방을 연 뒤\n＋ 버튼 → 파일 → 이 파일을 고르시면 전송됩니다.`);
+function manualShare(blob, nm, why){
+  dl(blob, nm);
+  alert(`${nm} 파일을 내려받았습니다.\n\n카카오톡 채팅방에서\n＋ → 파일 → 이 파일을 고르시면 전송됩니다.\n\n(카톡 바로 보내기는 이 기기에서 막혀 있습니다 · ${why})`);
 }
 function parseFile(text){                            // 옛 형식(원본 그대로)도 받아들인다
   const o = JSON.parse(text);
@@ -1598,6 +1606,6 @@ async function readAnyFile(file){
   render();
   try{ await loadDeptList(); render() }catch(e){}
   checkUpdate(false);
-  loadXLSX().catch(function(){});      // 저장·공유가 바로 되도록 미리 준비
+  loadXLSX().then(prepShare).catch(function(){});   // 저장·공유가 바로 되도록 미리 준비
 })();
 </script>
