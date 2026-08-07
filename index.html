@@ -491,14 +491,14 @@ function setStatus(t){ const el=document.getElementById('hSt'); if(el) el.textCo
 window.addEventListener('beforeunload', e=>{ if(dirty){ e.preventDefault(); e.returnValue='' } });
 
 /* ───────── 서버(공유) 저장 ───────── */
-const APPVER = '2026.8';
+const APPVER = '2026.9';
 const LIBKEY = 'church_ledger_lib_v1';
 let LIB = {};                                       // 다른 부서 파일 보관소
 const SRV = !!window.storage;                       // Claude 앱 안에서만 서버 저장 가능
 
 /* ── 파일 저장 / 열기 ── */
 function deptName(){ return (S.meta.dept||'').trim() }
-function fileName(ext){ return `${deptName()||'부서'}_${String(S.meta.year).slice(2)}회계.${ext||'txt'}` }
+function fileName(ext){ return `${deptName()||'부서'}_${String(S.meta.year).slice(2)}회계.${ext||'csv'}` }
 function payload(){
   return {app:'church-ledger', ver:APPVER, name:deptName(), year:S.meta.year, at:Date.now(), data:S};
 }
@@ -532,7 +532,7 @@ function applyUpdate(){
 function saveFile(){
   if(ro){ alert('열람 중인 다른 부서 자료는 저장할 수 없습니다.'); return }
   if(!deptName()){ alert('안내 탭 기본 정보에 작성 부서명을 먼저 입력하세요.'); return }
-  dl(new Blob([JSON.stringify(payload(),null,1)],{type:'text/plain;charset=utf-8'}), fileName());
+  dl(new Blob([JSON.stringify(payload(),null,1)],{type:'text/csv;charset=utf-8'}), fileName());
   srvMsg = `${fileName()} 파일로 저장했습니다. 공유 폴더에 넣어 두세요.`;
   render();
 }
@@ -540,9 +540,9 @@ async function shareFile(){
   if(ro){ alert('열람 중인 다른 부서 자료는 공유할 수 없습니다.'); return }
   if(!deptName()){ alert('안내 탭 기본 정보에 작성 부서명을 먼저 입력하세요.'); return }
   const txt = JSON.stringify(payload(),null,1);
-  const nm = fileName();                                        // .txt — 공유 가능한 형식
+  const nm = fileName();                                        // .csv — 카톡이 '파일'로 처리하는 형식
   try{
-    const f = new File([txt], nm, {type:'text/plain'});
+    const f = new File([txt], nm, {type:'text/csv'});
     if(navigator.share && navigator.canShare && navigator.canShare({files:[f]})){
       await navigator.share({files:[f]});    // 설명 글을 넣으면 카톡이 글자만 보내므로 파일만 전달한다
       srvMsg = `${nm} 파일을 공유했습니다. 파일이 안 가고 글자만 갔다면 [저장] 후 카톡에서 ＋ → 파일로 보내세요.`;
@@ -551,7 +551,7 @@ async function shareFile(){
   }catch(e){
     if(e && (e.name==='AbortError' || e.name==='NotAllowedError')) return;   // 사용자가 취소
   }
-  dl(new Blob([txt],{type:'text/plain;charset=utf-8'}), nm);    // 공유창을 못 여는 환경 (주로 PC)
+  dl(new Blob([txt],{type:'text/csv;charset=utf-8'}), nm);      // 공유창을 못 여는 환경 (주로 PC)
   alert(`이 기기에서는 공유창을 바로 열 수 없어 파일을 내려받았습니다.\n\n${nm}\n\n카카오톡에서 보낼 채팅방을 연 뒤 ＋ 버튼 → 파일에서 이 파일을 고르시면 됩니다.`);
 }
 function parseFile(text){                            // 옛 형식(원본 그대로)도 받아들인다
@@ -599,7 +599,7 @@ async function readFolder(){
     const dir = await window.showDirectoryPicker();
     let ok=0, fail=0;
     for await (const [nm, h] of dir.entries()){
-      if(h.kind!=='file' || !/\.(txt|json)$/i.test(nm)) continue;
+      if(h.kind!=='file' || !/\.(csv|txt|json)$/i.test(nm)) continue;
       try{ addToLib(await (await h.getFile()).text()); ok++ }catch(e){ fail++ }
     }
     await saveLib();
@@ -730,8 +730,8 @@ function render(){
   document.getElementById('nav').innerHTML =
     TABS.map(([k,l])=>`<button data-tab="${k}" class="${tab===k?'on':''}">${l}</button>`).join('')
     + `<div class="navr">${ro?'':'<button id="navSave" class="nsave">저장</button><button id="navShare" class="nsave alt">공유</button>'}
-       <input type="file" id="deptFiles" multiple accept=".txt,.json,text/plain,application/json" style="display:none">
-       <input type="file" id="myFile" accept=".txt,.json,text/plain,application/json" style="display:none"></div>`;
+       <input type="file" id="deptFiles" multiple accept=".csv,.txt,.json,text/csv,text/plain,application/json" style="display:none">
+       <input type="file" id="myFile" accept=".csv,.txt,.json,text/csv,text/plain,application/json" style="display:none"></div>`;
 
   const upd = newVer ? `<div class="robar no-print" style="background:#e8f0ed;border-color:#cfe6da;color:#26493f">
       <b>새 버전 ${esc(newVer)}이 나왔습니다.</b>
@@ -1197,7 +1197,7 @@ function vData(){
       화면 맨 위 <b>저장</b> 버튼을 눌러도 되고, 아래 [파일로 저장]을 눌러도 같습니다.
       <b>공유</b> 버튼은 만든 파일을 그 자리에서 카카오톡 등으로 보냅니다.
       만들어진 파일을 <b>공유 폴더</b>(구글 드라이브·원드라이브 등)에 넣어 두면 다른 부서도 볼 수 있습니다.
-      파일은 <b>.txt</b> 형식이며 카카오톡으로도 그대로 보낼 수 있습니다.
+      파일은 이 프로그램 전용이므로 엑셀 등으로 열지 마시고, 열 때는 <b>파일 열기</b>를 쓰세요.
       브라우저 데이터를 지우면 자동 보관분은 사라지지만, 저장해 둔 파일은 그대로 남습니다.
     </div>
   </div>
