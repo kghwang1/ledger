@@ -490,7 +490,7 @@ function setStatus(t){ const el=document.getElementById('hSt'); if(el) el.textCo
 window.addEventListener('beforeunload', e=>{ if(dirty){ e.preventDefault(); e.returnValue='' } });
 
 /* ───────── 서버(공유) 저장 ───────── */
-const APPVER = '2026.2';
+const APPVER = '2026.5';
 const LIBKEY = 'church_ledger_lib_v1';
 let LIB = {};                                       // 다른 부서 파일 보관소
 const SRV = !!window.storage;                       // Claude 앱 안에서만 서버 저장 가능
@@ -501,6 +501,33 @@ function fileName(ext){ return `${deptName()||'부서'}_${String(S.meta.year).sl
 function payload(){
   return {app:'church-ledger', ver:APPVER, name:deptName(), year:S.meta.year, at:Date.now(), data:S};
 }
+/* ── 새 버전 확인 ── */
+let newVer = '';
+function baseUrl(){ return String(location.href).split('#')[0].split('?')[0] }
+async function checkUpdate(manual){
+  if(!/^https?:/.test(location.protocol)){
+    if(manual) alert('인터넷 주소로 열었을 때만 확인할 수 있습니다.');
+    return;
+  }
+  try{
+    const r = await fetch(baseUrl()+'?v='+Date.now(), {cache:'no-store'});
+    const t = await r.text();
+    const m = t.match(/const APPVER = '([^']+)'/);
+    if(!m) return;
+    if(m[1] !== APPVER){ newVer = m[1]; render() }
+    else if(manual) alert(`최신 버전입니다. (버전 ${APPVER})`);
+  }catch(e){
+    if(manual) alert('확인할 수 없습니다. 인터넷 연결을 확인해 주세요.');
+  }
+}
+function applyUpdate(){
+  if(dirty || !confirm('새 버전으로 바꿉니다.\n작성 중이던 내용은 이 기기에 그대로 남습니다. 계속할까요?')) {
+    if(dirty){ alert('먼저 [저장]을 눌러 파일을 만든 뒤 다시 시도하세요.'); return }
+    return;
+  }
+  location.replace(baseUrl()+'?v='+Date.now());
+}
+
 function saveFile(){
   if(ro){ alert('열람 중인 다른 부서 자료는 저장할 수 없습니다.'); return }
   if(!deptName()){ alert('안내 탭 기본 정보에 작성 부서명을 먼저 입력하세요.'); return }
@@ -705,12 +732,16 @@ function render(){
        <input type="file" id="deptFiles" multiple accept=".json,application/json" style="display:none">
        <input type="file" id="myFile" accept=".json,application/json" style="display:none"></div>`;
 
+  const upd = newVer ? `<div class="robar no-print" style="background:#e8f0ed;border-color:#cfe6da;color:#26493f">
+      <b>새 버전 ${esc(newVer)}이 나왔습니다.</b>
+      <span>지금 쓰시는 것은 ${APPVER} 입니다. 기록해 두신 내용은 그대로 남습니다.</span>
+      <button class="btn sm" id="doUpd" style="margin-left:auto">새 버전으로 바꾸기</button></div>` : '';
   const banner = ro ? `<div class="robar no-print"><b>읽기 전용</b>
       <span>${esc(roName)} 부서 자료를 열람 중입니다. 내용을 고칠 수 없습니다.</span>
       <button class="btn g sm" id="backMine" style="margin-left:auto">내 부서로 돌아가기</button></div>`
     : (srvMsg? `<div class="robar no-print" style="background:var(--in-bg);border-color:#cfe6da;color:#1d6b4f">${esc(srvMsg)}</div>`:'');
 
-  document.getElementById('view').innerHTML = banner +
+  document.getElementById('view').innerHTML = upd + banner +
     ({guide:vGuide,budget:vBudget,ledger:vLedger,settle:vSettle,next:vNext,data:vData})[tab]();
   document.querySelectorAll('#nav button[data-tab]').forEach(b=>b.onclick=()=>{tab=b.dataset.tab;render();window.scrollTo(0,0)});
   const nsv = document.getElementById('navSave');
@@ -749,7 +780,7 @@ function vGuide(){
   <div class="row">
     <div class="col card" style="flex:2;min-width:340px">
       <h2>기본 정보</h2>
-      <p class="hint">회계기간은 ${S.meta.year}.1.1 ~ ${S.meta.year}.12.31 입니다. 12월은 가결산으로 잡아 잔고를 0으로 맞춥니다.</p>
+      <p class="hint">회계기간은 ${S.meta.year}.1.1 ~ ${S.meta.year}.12.31 입니다.</p>
       <div class="row">
         <div class="col" style="min-width:120px"><label class="hint" style="margin:0">회계연도</label><input type="number" data-meta="year" value="${S.meta.year}"></div>
         <div class="col" style="min-width:120px"><label class="hint" style="margin:0">작성 부서</label><input type="text" data-meta="dept" value="${S.meta.dept}" placeholder="예: 유초등부"></div>
@@ -763,13 +794,8 @@ function vGuide(){
       <input type="text" data-meta="url" class="no-print" value="${esc(S.meta.url||'')}" placeholder="https://... 파일 주소">
       <div id="qrBox" style="text-align:center;margin-top:12px"></div>
       <div class="tools no-print" style="margin:10px 0 0;justify-content:center">
-        <button class="btn g sm" id="qrHere">현재 주소 넣기</button>
-        <button class="btn g sm" id="qrPng">QR 이미지 저장</button>
-        <button class="btn g sm" id="qrMsg">안내문 복사</button>
-        <button class="btn g sm" id="qrCopy">주소만 복사</button>
-        <span id="qrShareWrap"></span>
+        <button class="btn g sm" id="qrCopy">주소 복사</button>
       </div>
-      <p class="hint no-print" style="margin:8px 0 0">저장한 이미지 안에 주소 글자가 함께 들어갑니다. <b>안내문 복사</b> 후 카톡에 붙여넣으면 주소가 눌러지는 링크로 바뀝니다.</p>
     </div>
   </div>
 
@@ -805,18 +831,6 @@ function vGuide(){
         이 파일을 공유 폴더에 넣어 두면 다른 부서도 볼 수 있습니다.
         다른 부서 자료를 보시려면 <b>데이터</b> 탭으로 가세요.</div>
     </div>
-  </div>
-
-  <div class="card">
-    <h2>현재 상황</h2>
-    <div class="row">
-      ${P.map(p=>`<div class="col" style="min-width:145px">
-        <div class="hint" style="margin:0">${p.label}${p.prev?' <span class="badge b-w">별도</span>':''}</div>
-        <div class="big">${won(closing(p.k))}</div>
-        <div class="hint" style="margin:0">${p.d(S.meta.year)} · ${ents(p.k).length}건</div>
-      </div>`).join('')}
-    </div>
-    ${orphanCount()?`<div class="note w" style="margin-top:12px">예산에 없는 항목으로 기록된 거래가 ${orphanCount()}건 있습니다. 출납부에서 <span class="badge b-w">미등록</span> 표시를 확인하세요.</div>`:''}
   </div>`;
 }
 
@@ -862,8 +876,54 @@ function vBudget(){
   <div class="print-only"><div class="sign"><div>담당자</div><div>총무</div><div>팀장</div></div></div>`;
 }
 
+/* ── 출납부 › 현재 상황 ── */
+function vStatus(){
+  const s=settle();
+  const rows = P.map(p=>({
+    label: p.k==='DEC' ? `작년 12월` : p.label,
+    sub: p.d(S.meta.year),
+    inc: ents(p.k).filter(e=>e.type==='수입').reduce((t,e)=>t+e.amount,0),
+    exp: ents(p.k).filter(e=>e.type==='지출').reduce((t,e)=>t+e.amount,0),
+    bal: closing(p.k)
+  }));
+  const incAll = rows.reduce((t,r)=>t+r.inc,0), expAll = rows.reduce((t,r)=>t+r.exp,0);
+  return `
+  ${pHead(`${S.meta.year}년 ${S.meta.dept} 현재 상황`, `회계기간 ${PERIOD(S.meta.year)}`)}
+  ${pBar()}
+  <div class="card">
+    <h2>기간별 현황</h2>
+    <table class="wt"><thead><tr><th style="width:110px">기간</th>
+      <th class="n" style="width:110px">수입</th><th class="n" style="width:110px">지출</th>
+      <th class="n" style="width:120px">잔고</th></tr></thead><tbody>
+      <tr class="sub"><td>이월<div class="hint" style="margin:0">${S.meta.year-1}년 11월 말</div></td>
+        <td class="n">-</td><td class="n">-</td><td class="n">${won(S.openingBalance)}</td></tr>
+      ${rows.map(r=>`<tr><td>${esc(r.label)}<div class="hint" style="margin:0">${esc(r.sub)}</div></td>
+        <td class="n ${r.inc?'in':''}">${r.inc?won(r.inc):'-'}</td>
+        <td class="n ${r.exp?'out':''}">${r.exp?won(r.exp):'-'}</td>
+        <td class="n">${won(r.bal)}</td></tr>`).join('')}
+      <tr class="tot"><td>합계</td><td class="n">${won(incAll)}</td><td class="n">${won(expAll)}</td>
+        <td class="n">${won(closing('Q4'))}</td></tr>
+    </tbody></table>
+    <p class="swipe">← 표를 옆으로 밀어 보세요 →</p>
+  </div>
+
+  <div class="card">
+    <h2>현재까지 결산 <span class="hint" style="display:inline">${S.meta.year}년 · 작년 12월 제외</span></h2>
+    <div class="kv"><span>수 입 <span class="hint" style="display:inline">이월금 ${won(s.carry)} 포함</span></span><b class="in">${won(s.incT)}</b></div>
+    <div class="kv"><span>지 출</span><b class="out">${won(s.expT)}</b></div>
+    <div class="kv" style="border:0"><span><b>통장 잔고</b></span><b class="big">${won(s.q4)}</b></div>
+    <p class="hint" style="margin-top:10px">작년 12월은 별도 정산이며, 그 잔고 ${won(s.carry)}원이 ${S.meta.year}년 이월금으로 들어갑니다.</p>
+  </div>
+  ${orphanCount()?`<div class="note w">예산에 없는 항목으로 기록된 거래가 ${orphanCount()}건 있습니다. 각 기간에서 <span class="badge b-w">미등록</span> 표시를 확인하세요.</div>`:''}`;
+}
+
 /* ── 출납부 ── */
 function vLedger(){
+  const chips = `<div class="chips no-print">
+    <button class="chip ${per==='SUM'?'on':''}" data-per="SUM">현재 상황</button>
+    ${P.map(x=>`<button class="chip ${x.k===per?'on':''}" data-per="${x.k}" title="${x.d(S.meta.year)}">${x.label}</button>`).join('')}
+  </div>`;
+  if(per==='SUM') return chips + vStatus();
   const p = P.find(x=>x.k===per);
   const list = sorted(per);
   const K = knownCats();
@@ -884,9 +944,7 @@ function vLedger(){
 
   return `
   ${pHead(ptitle, psub)}
-  <div class="chips no-print">
-    ${P.map(x=>`<button class="chip ${x.k===per?'on':''}" data-per="${x.k}" title="${x.d(S.meta.year)}">${x.label}</button>`).join('')}
-  </div>
+  ${chips}
 
   <div class="card">
     <h2 class="no-print">${p.label} 수입 및 지출 내역 <span class="hint" style="display:inline">${p.d(S.meta.year)}</span></h2>
@@ -1184,7 +1242,16 @@ function vData(){
     <h2>초기화</h2>
     <p class="hint">내 부서 기록을 모두 지우고 빈 장부로 되돌립니다. 되돌릴 수 없습니다. (읽어 둔 다른 부서 목록은 남습니다.)</p>
     <button class="btn dg no-ro" id="wipe">전체 초기화</button>
-    <p class="hint" style="margin-top:16px">프로그램 버전 ${APPVER}</p>
+  </div>
+
+  <div class="card">
+    <h2>프로그램 버전</h2>
+    <div class="kv" style="border:0"><span>지금 쓰시는 버전</span><b>${APPVER}${newVer?` → 새 버전 ${esc(newVer)} 있음`:''}</b></div>
+    <div class="tools" style="margin-top:12px">
+      <button class="btn g" id="chkUpd">최신 버전 확인</button>
+      ${newVer?`<button class="btn" id="doUpd2">새 버전으로 바꾸기</button>`:''}
+    </div>
+    <p class="hint" style="margin:10px 0 0">프로그램을 새 버전으로 바꿔도 기록해 두신 내용과 읽어 둔 부서 목록은 그대로 남습니다.</p>
   </div>`;
 }
 
@@ -1355,27 +1422,12 @@ function bind(){
   };
 
   drawQR();
-  if($('#qrHere')) $('#qrHere').onclick=()=>{
-    let u='';
-    try{ u=String(location.href).split('#')[0] }catch(e){}
-    if(!/^https?:\/\//.test(u)){ alert('이 화면의 주소를 읽을 수 없습니다. 주소창의 주소를 직접 붙여넣어 주세요.'); return }
-    S.meta.url=u; save(); render();
-  };
-  if($('#qrPng')) $('#qrPng').onclick=()=>savePNG();
-  if($('#qrMsg')) $('#qrMsg').onclick=()=>{
-    if(!(S.meta.url||'').trim()){ alert('먼저 주소를 입력하세요.'); return }
-    copyText(shareMsg(), '안내문을 복사했습니다. 카톡에 붙여넣으세요.');
-  };
   if($('#qrCopy')) $('#qrCopy').onclick=()=>{
     const u=(S.meta.url||'').trim();
     if(!u){ alert('먼저 주소를 입력하세요.'); return }
     copyText(u, '주소를 복사했습니다.');
   };
-  const sw=$('#qrShareWrap');
-  if(sw && navigator.share){
-    sw.innerHTML='<button class="btn g sm" id="qrShare">이미지 공유</button>';
-    $('#qrShare').onclick=shareQR;
-  }
+  const du=$('#doUpd'); if(du) du.onclick=applyUpdate;
   const bm=$('#backMine'); if(bm) bm.onclick=()=>{ if(ro){ S=mine||S; ro=false; mine=null; roName=''; srvMsg=''; tab='guide'; render() } };
 
   on('[data-xe]','change',e=>{ const i=+e.target.dataset.xe, f=e.target.dataset.f;
@@ -1398,6 +1450,8 @@ function bind(){
   };
   on('[data-lib-read]','click',e=>readDept(e.target.dataset.libRead));
   on('[data-lib-del]','click',e=>{ delete LIB[e.target.dataset.libDel.slice(5)]; saveLib(); render() });
+  if($('#chkUpd')) $('#chkUpd').onclick=()=>checkUpdate(true);
+  if($('#doUpd2')) $('#doUpd2').onclick=applyUpdate;
   if($('#sSaveBtn')) $('#sSaveBtn').onclick=srvSave;
   if($('#sLoadBtn')) $('#sLoadBtn').onclick=srvLoad;
   if($('#xExcel')) $('#xExcel').onclick=exportExcel;
@@ -1507,5 +1561,6 @@ async function exportExcel(){
   setStatus('임시 보관됨');
   render();
   try{ await loadDeptList(); render() }catch(e){}
+  checkUpdate(false);
 })();
 </script>
