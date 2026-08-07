@@ -22,10 +22,10 @@ body{
 .wrap{max-width:1180px;margin:0 auto;padding:0 16px 80px}
 header{background:var(--accent);color:#fff;padding:14px 0 0}
 header .wrap{padding-bottom:0}
-.hd{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;padding-bottom:12px}
-.hd h1{font-size:19px;margin:0;font-weight:700;letter-spacing:-.02em}
-.hd .sub{font-size:12.5px;opacity:.82}
-.hd .st{margin-left:auto;font-size:12px;opacity:.8}
+.hd{display:flex;align-items:baseline;gap:12px;flex-wrap:nowrap;padding-bottom:2px}
+header h1{font-size:19px;margin:0 0 10px;font-weight:700;letter-spacing:-.02em}
+.hd .sub{font-size:13px;opacity:.9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hd .st{margin-left:auto;font-size:12px;opacity:.8;white-space:nowrap;flex-shrink:0}
 nav{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none}
 nav::-webkit-scrollbar{display:none}
 nav button{
@@ -173,10 +173,10 @@ ol.steps small{color:var(--mute);display:block}
 <header>
   <div class="wrap">
     <div class="hd">
-      <h1 id="hTitle">부서 회계장부</h1>
       <span class="sub" id="hSub"></span>
       <span class="st" id="hSt"></span>
     </div>
+    <h1 id="hTitle">부서 회계장부</h1>
     <nav id="nav"></nav>
   </div>
 </header>
@@ -491,7 +491,7 @@ function setStatus(t){ const el=document.getElementById('hSt'); if(el) el.textCo
 window.addEventListener('beforeunload', e=>{ if(dirty){ e.preventDefault(); e.returnValue='' } });
 
 /* ───────── 서버(공유) 저장 ───────── */
-const APPVER = '2026.14';
+const APPVER = '2026.15';
 const LIBKEY = 'church_ledger_lib_v1';
 const DATASHEET = '_data', DATATAG = 'CHURCH_LEDGER_V1';
 const XLSXMIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -772,7 +772,7 @@ function render(){
   document.getElementById('hTitle').textContent = ro
     ? `${S.meta.year}년 ${roName} 자료열람`
     : `${S.meta.year}년 ${S.meta.dept||'부서'} 회계장부`;
-  document.getElementById('hSub').textContent = (S.meta.church? S.meta.church+' · ':'') + `회계기간 ${PERIOD(S.meta.year)}`;
+  document.getElementById('hSub').textContent = S.meta.church || '';
 
   document.getElementById('nav').innerHTML =
     TABS.map(([k,l])=>`<button data-tab="${k}" class="${tab===k?'on':''}">${l}</button>`).join('')
@@ -891,9 +891,9 @@ function vBudget(){
   <div class="note">여기 입력한 <b>항목 이름</b>이 출납부의 선택 메뉴가 됩니다. 처음 정한 이름은 정산이 끝날 때까지 변경하지 마세요. 수입 합계와 지출 합계가 같아야 합니다.</div>
   <div class="row">
     <div class="col card">
-      <h2>수입 예산</h2>
+      <h2>수입 계획</h2>
       <p class="hint">첫 번째 항목(이월금)은 결산에서 12월 잔고가 자동으로 들어갑니다.</p>
-      <table class="wb"><thead><tr><th style="width:120px">항목</th><th class="n" style="width:110px">수입액</th><th style="width:34px"></th></tr></thead><tbody>
+      <table class="wb"><thead><tr><th style="width:84px">항목</th><th class="n" style="width:77px">수입액</th><th style="width:34px"></th></tr></thead><tbody>
       ${S.incomeItems.map((it,i)=>`<tr>
         <td><input type="text" data-bi="${i}" data-f="name" value="${esc(it.name)}"></td>
         <td class="n"><input type="text" class="n" data-bi="${i}" data-f="budget" value="${won(it.budget)}"></td>
@@ -903,7 +903,7 @@ function vBudget(){
       <button class="btn g sm no-ro" style="margin-top:10px" data-add-inc>+ 수입 항목 추가</button>
     </div>
     <div class="col card">
-      <h2>지출 예산</h2>
+      <h2>지출 계획</h2>
       <p class="hint">항목 앞에 번호를 붙이면(예: 1.겨울성경학교) 정렬이 쉽습니다.</p>
       <table class="wb"><thead><tr><th style="width:120px">항목</th><th class="n" style="width:100px">지출액</th><th style="width:150px">산출근거</th><th style="width:34px"></th></tr></thead><tbody>
       ${S.expenseItems.map((it,i)=>`<tr>
@@ -1003,7 +1003,7 @@ function vLedger(){
         <div class="fi narrow"><label>관</label>
           <select id="fType"><option ${ed&&ed.type==='지출'?'':'selected'}>수입</option><option ${ed&&ed.type==='지출'?'selected':''}>지출</option></select></div>
         <div class="fi f-hang"><label>항</label><select id="fCat"></select></div>
-        <div class="fi f-date"><label>날짜</label><input type="date" id="fDate" value="${ed?ed.date:defDate(p)}"></div>
+        <div class="fi f-date"><label>날짜</label><input type="text" inputmode="numeric" id="fDate" placeholder="26.02.11" value="${fmtDate(ed?ed.date:defDate(p))}"></div>
         <div class="fi f-amt"><label>금액</label><input type="text" class="n" id="fAmt" value="${ed?won(ed.amount):''}" placeholder="0"></div>
       </div>
       <div class="fr">
@@ -1080,6 +1080,31 @@ function itemPanel(k){
     <tr class="sub"><td>계</td><td class="n">${won(se)}</td>${isQ?`<td class="n">${won(S.expenseItems.reduce((s,i)=>s+cumAmt(k,i.name,true),0))}</td>`:''}</tr>
     </tbody></table></div>`;
 }
+/* 날짜 표기 — 화면은 26.02.11, 속으로는 2026-02-11 로 다룬다 */
+function fmtDate(iso){
+  const m=String(iso||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return m ? m[1].slice(2)+'.'+m[2]+'.'+m[3] : '';
+}
+function parseDate(v, defY){
+  const raw=String(v||'').trim();
+  let y,mo,da;
+  const parts=raw.split(/[^0-9]+/).filter(x=>x!=='');
+  if(parts.length===3){                       // 26.2.11 / 2026-02-11 처럼 나눠 적은 경우
+    y=+parts[0]; mo=+parts[1]; da=+parts[2];
+    if(y<100) y+=2000;
+  } else if(parts.length===2){                // 4.15 처럼 월·일만 적은 경우
+    y=defY; mo=+parts[0]; da=+parts[1];
+  } else {
+    const d=raw.replace(/\D/g,'');
+    if(d.length===8){ y=+d.slice(0,4); mo=+d.slice(4,6); da=+d.slice(6,8) }
+    else if(d.length===6){ y=2000+ +d.slice(0,2); mo=+d.slice(2,4); da=+d.slice(4,6) }
+    else if(d.length===4){ y=defY; mo=+d.slice(0,2); da=+d.slice(2,4) }
+    else return '';
+  }
+  if(mo<1||mo>12||da<1||da>31) return '';
+  return y+'-'+String(mo).padStart(2,'0')+'-'+String(da).padStart(2,'0');
+}
+function periodYear(p){ return p.k==='DEC' ? S.meta.year-1 : S.meta.year }
 function defDate(p){
   const y = p.k==='DEC' ? S.meta.year-1 : S.meta.year;
   const last = ents(p.k).slice(-1)[0];
@@ -1102,7 +1127,7 @@ function vSettle(){
     <div class="row">
       <div class="col">
         <h2 style="font-size:14px">수입 결산</h2>
-        <table class="wt"><thead><tr><th>항목</th><th class="n">예산</th><th class="n">수입</th><th class="n">증감</th></tr></thead><tbody>
+        <table class="wt"><thead><tr><th style="width:78px">항목</th><th class="n">예산</th><th class="n">수입</th><th class="n">증감</th></tr></thead><tbody>
         ${s.inc.map((x,i)=>`<tr><td>${esc(x.name)}${i===0?` <span class="hint" style="display:inline">(${S.meta.year-1}년 12월 정산 잔고)</span>`:''}</td>
           <td class="n">${won(x.budget)}</td><td class="n">${won(x.actual)}</td>
           <td class="n ${x.actual-x.budget<0?'out':''}">${won(x.actual-x.budget)}</td></tr>`).join('')}
@@ -1450,7 +1475,9 @@ function bind(){
       const amt=num($('#fAmt').value), cat=$('#fCat').value;
       if(!cat){ alert('예산 탭에서 항목을 먼저 등록하세요.'); return }
       if(!amt){ $('#fAmt').focus(); return }
-      const rec={type:ft.value,cat,date:$('#fDate').value,amount:Math.abs(amt),note:$('#fNote').value.trim()};
+      const iso = parseDate($('#fDate').value, per==='DEC'? S.meta.year-1 : S.meta.year);
+      if(!iso){ alert('날짜를 26.02.11 형식으로 넣어 주세요.'); $('#fDate').focus(); return }
+      const rec={type:ft.value,cat,date:iso,amount:Math.abs(amt),note:$('#fNote').value.trim()};
       if(editId){ const i=ents(per).findIndex(x=>x.id===editId); S.entries[per][i]=Object.assign({id:editId},rec); lastAdd=editId; editId=null }
       else { const id=uid(); S.entries[per].push(Object.assign({id},rec)); lastAdd=id }
       const mo = rec.date? +rec.date.slice(5,7) : 0;      // 걸러져 안 보이면 필터 해제
@@ -1459,7 +1486,9 @@ function bind(){
       const a=$('#fAmt'); if(a) a.focus();
     };
     $('#fAdd').onclick=add;
-    ['fAmt','fNote'].forEach(id=>{ const el=$('#'+id); if(el) el.onkeydown=ev=>{ if(ev.key==='Enter') add() } });
+    ['fAmt','fNote','fDate'].forEach(id=>{ const el=$('#'+id); if(el) el.onkeydown=ev=>{ if(ev.key==='Enter') add() } });
+    const fd=$('#fDate');
+    if(fd) fd.onblur=()=>{ const iso=parseDate(fd.value, per==='DEC'? S.meta.year-1 : S.meta.year); if(iso) fd.value=fmtDate(iso) };
     if($('#fCancel')) $('#fCancel').onclick=()=>{ editId=null; render() };
   }
 
