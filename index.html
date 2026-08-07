@@ -491,14 +491,16 @@ function setStatus(t){ const el=document.getElementById('hSt'); if(el) el.textCo
 window.addEventListener('beforeunload', e=>{ if(dirty){ e.preventDefault(); e.returnValue='' } });
 
 /* ───────── 서버(공유) 저장 ───────── */
-const APPVER = '2026.9';
+const APPVER = '2026.10';
 const LIBKEY = 'church_ledger_lib_v1';
+const DATASHEET = '_data', DATATAG = 'CHURCH_LEDGER_V1';
+const XLSXMIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 let LIB = {};                                       // 다른 부서 파일 보관소
 const SRV = !!window.storage;                       // Claude 앱 안에서만 서버 저장 가능
 
 /* ── 파일 저장 / 열기 ── */
 function deptName(){ return (S.meta.dept||'').trim() }
-function fileName(ext){ return `${deptName()||'부서'}_${String(S.meta.year).slice(2)}회계.${ext||'csv'}` }
+function fileName(ext){ return `${deptName()||'부서'}_${String(S.meta.year).slice(2)}회계.${ext||'xlsx'}` }
 function payload(){
   return {app:'church-ledger', ver:APPVER, name:deptName(), year:S.meta.year, at:Date.now(), data:S};
 }
@@ -529,29 +531,38 @@ function applyUpdate(){
   location.replace(baseUrl()+'?v='+Date.now());
 }
 
-function saveFile(){
+async function saveFile(){
   if(ro){ alert('열람 중인 다른 부서 자료는 저장할 수 없습니다.'); return }
   if(!deptName()){ alert('안내 탭 기본 정보에 작성 부서명을 먼저 입력하세요.'); return }
-  dl(new Blob([JSON.stringify(payload(),null,1)],{type:'text/csv;charset=utf-8'}), fileName());
-  srvMsg = `${fileName()} 파일로 저장했습니다. 공유 폴더에 넣어 두세요.`;
+  try{
+    dl(await xlsxBlob(), fileName('xlsx'));
+    srvMsg = `${fileName('xlsx')} 파일로 저장했습니다. 공유 폴더에 넣어 두세요.`;
+  }catch(e){
+    dl(new Blob([JSON.stringify(payload(),null,1)],{type:'text/csv;charset=utf-8'}), fileName('csv'));
+    srvMsg = `엑셀을 만들 수 없어 ${fileName('csv')} 로 저장했습니다. (인터넷 연결 필요)`;
+  }
   render();
 }
 async function shareFile(){
   if(ro){ alert('열람 중인 다른 부서 자료는 공유할 수 없습니다.'); return }
   if(!deptName()){ alert('안내 탭 기본 정보에 작성 부서명을 먼저 입력하세요.'); return }
-  const txt = JSON.stringify(payload(),null,1);
-  const nm = fileName();                                        // .csv — 카톡이 '파일'로 처리하는 형식
+  let blob, nm;
+  try{ blob = await xlsxBlob(); nm = fileName('xlsx') }      // 엑셀 — 카톡이 확실하게 '파일'로 처리한다
+  catch(e){
+    blob = new Blob([JSON.stringify(payload(),null,1)],{type:'text/csv;charset=utf-8'});
+    nm = fileName('csv');
+  }
   try{
-    const f = new File([txt], nm, {type:'text/csv'});
+    const f = new File([blob], nm, {type:blob.type});
     if(navigator.share && navigator.canShare && navigator.canShare({files:[f]})){
       await navigator.share({files:[f]});    // 설명 글을 넣으면 카톡이 글자만 보내므로 파일만 전달한다
-      srvMsg = `${nm} 파일을 공유했습니다. 파일이 안 가고 글자만 갔다면 [저장] 후 카톡에서 ＋ → 파일로 보내세요.`;
+      srvMsg = `${nm} 파일을 공유했습니다.`;
       render(); return;
     }
   }catch(e){
     if(e && (e.name==='AbortError' || e.name==='NotAllowedError')) return;   // 사용자가 취소
   }
-  dl(new Blob([txt],{type:'text/csv;charset=utf-8'}), nm);      // 공유창을 못 여는 환경 (주로 PC)
+  dl(blob, nm);                                               // 공유창을 못 여는 환경 (주로 PC)
   alert(`이 기기에서는 공유창을 바로 열 수 없어 파일을 내려받았습니다.\n\n${nm}\n\n카카오톡에서 보낼 채팅방을 연 뒤 ＋ 버튼 → 파일에서 이 파일을 고르시면 됩니다.`);
 }
 function parseFile(text){                            // 옛 형식(원본 그대로)도 받아들인다
@@ -567,31 +578,26 @@ function addToLib(text){
   if(!LIB[k] || (r.at||0) >= (LIB[k].at||0)) LIB[k] = r;   // 같은 부서면 최신 것만 남긴다
   return r;
 }
-function openMyFile(file){
-  const rd=new FileReader();
-  rd.onload=()=>{ try{
-      const r=parseFile(rd.result);
-      if(!confirm(`${r.name} ${r.year}년 자료를 불러옵니다.\n지금 화면의 내용은 사라집니다. 계속할까요?`)) return;
-      S=norm(r.data); ro=false; mine=null; editId=null; save();
-      srvMsg='파일을 불러왔습니다.'; tab='guide'; render();
-    }catch(e){ alert('회계장부 파일이 아닙니다.') } };
-  rd.readAsText(file);
+async function openMyFile(file){
+  let r;
+  try{ r = await readAnyFile(file) }
+  catch(e){ alert('회계장부 파일이 아닙니다.\n' + (e && e.message ? e.message : '')); return }
+  if(!confirm(`${r.name} ${r.year}년 자료를 불러옵니다.\n지금 화면의 내용은 사라집니다. 계속할까요?`)) return;
+  S=norm(r.data); ro=false; mine=null; editId=null; save();
+  srvMsg='파일을 불러왔습니다.'; tab='guide'; render();
 }
-function openDeptFiles(files){
-  let ok=0, fail=0, left=files.length;
-  if(!left) return;
-  Array.prototype.forEach.call(files, f=>{
-    const rd=new FileReader();
-    rd.onload=()=>{ try{ addToLib(rd.result); ok++ }catch(e){ fail++ } done() };
-    rd.onerror=()=>{ fail++; done() };
-    rd.readAsText(f);
-  });
-  function done(){
-    if(--left) return;
-    saveLib();
-    srvMsg = `부서 파일 ${ok}개를 읽었습니다.` + (fail?` (${fail}개는 형식이 달라 건너뜀)`:'');
-    render();
+async function openDeptFiles(files){
+  let ok=0, fail=0;
+  for(const f of Array.prototype.slice.call(files)){
+    try{ const r = await readAnyFile(f); const k=libKey(r);
+      if(!LIB[k] || (r.at||0) >= (LIB[k].at||0)) LIB[k]=r;
+      ok++ }
+    catch(e){ fail++ }
   }
+  if(!ok && !fail) return;
+  await saveLib();
+  srvMsg = `부서 파일 ${ok}개를 읽었습니다.` + (fail?` (${fail}개는 형식이 달라 건너뜀)`:'');
+  render();
 }
 async function readFolder(){
   if(!window.showDirectoryPicker){ alert('이 브라우저는 폴더 읽기를 지원하지 않습니다.\n대신 [부서 파일 읽기]로 파일을 여러 개 선택하세요.'); return }
@@ -599,8 +605,9 @@ async function readFolder(){
     const dir = await window.showDirectoryPicker();
     let ok=0, fail=0;
     for await (const [nm, h] of dir.entries()){
-      if(h.kind!=='file' || !/\.(csv|txt|json)$/i.test(nm)) continue;
-      try{ addToLib(await (await h.getFile()).text()); ok++ }catch(e){ fail++ }
+      if(h.kind!=='file' || !/\.(xlsx|csv|txt|json)$/i.test(nm)) continue;
+      try{ const r=await readAnyFile(await h.getFile()); const k=libKey(r);
+        if(!LIB[k] || (r.at||0) >= (LIB[k].at||0)) LIB[k]=r; ok++ }catch(e){ fail++ }
     }
     await saveLib();
     srvMsg = `폴더에서 부서 파일 ${ok}개를 읽었습니다.` + (fail?` (${fail}개 건너뜀)`:'');
@@ -730,8 +737,8 @@ function render(){
   document.getElementById('nav').innerHTML =
     TABS.map(([k,l])=>`<button data-tab="${k}" class="${tab===k?'on':''}">${l}</button>`).join('')
     + `<div class="navr">${ro?'':'<button id="navSave" class="nsave">저장</button><button id="navShare" class="nsave alt">공유</button>'}
-       <input type="file" id="deptFiles" multiple accept=".csv,.txt,.json,text/csv,text/plain,application/json" style="display:none">
-       <input type="file" id="myFile" accept=".csv,.txt,.json,text/csv,text/plain,application/json" style="display:none"></div>`;
+       <input type="file" id="deptFiles" multiple accept=".xlsx,.csv,.txt,.json" style="display:none">
+       <input type="file" id="myFile" accept=".xlsx,.csv,.txt,.json" style="display:none"></div>`;
 
   const upd = newVer ? `<div class="robar no-print" style="background:#e8f0ed;border-color:#cfe6da;color:#26493f">
       <b>새 버전 ${esc(newVer)}이 나왔습니다.</b>
@@ -1190,14 +1197,13 @@ function vData(){
       <button class="btn" id="fSave">파일로 저장</button>
       <button class="btn g" id="fShare">카톡으로 공유</button>
       <button class="btn g" id="fOpen">파일 열기</button>
-      <button class="btn g" id="xExcel">엑셀(.xlsx)로 내보내기</button>
     </div>
     <div class="note" style="margin-top:12px">
       입력하는 동안은 이 기기에 자동 보관되지만, <b>기록을 마치면 반드시 저장</b>하세요.
       화면 맨 위 <b>저장</b> 버튼을 눌러도 되고, 아래 [파일로 저장]을 눌러도 같습니다.
       <b>공유</b> 버튼은 만든 파일을 그 자리에서 카카오톡 등으로 보냅니다.
       만들어진 파일을 <b>공유 폴더</b>(구글 드라이브·원드라이브 등)에 넣어 두면 다른 부서도 볼 수 있습니다.
-      파일은 이 프로그램 전용이므로 엑셀 등으로 열지 마시고, 열 때는 <b>파일 열기</b>를 쓰세요.
+      파일은 <b>엑셀(.xlsx)</b>이라 그냥 열어 보실 수도 있고, 이 프로그램에서 <b>파일 열기</b>로 다시 불러올 수도 있습니다.
       브라우저 데이터를 지우면 자동 보관분은 사라지지만, 저장해 둔 파일은 그대로 남습니다.
     </div>
   </div>
@@ -1456,7 +1462,6 @@ function bind(){
   if($('#doUpd2')) $('#doUpd2').onclick=applyUpdate;
   if($('#sSaveBtn')) $('#sSaveBtn').onclick=srvSave;
   if($('#sLoadBtn')) $('#sLoadBtn').onclick=srvLoad;
-  if($('#xExcel')) $('#xExcel').onclick=exportExcel;
   if($('#newYear')) $('#newYear').onclick=()=>{
     if(!confirm(`${S.meta.year+1}년 장부를 새로 시작합니다. 현재 기록은 사라집니다. 백업하셨나요?`)) return;
     const s=settle(), y=S.meta.year+1;
@@ -1500,8 +1505,8 @@ function loadXLSX(){
     s.onload=res; s.onerror=rej; document.head.appendChild(s);
   });
 }
-async function exportExcel(){
-  try{ await loadXLSX() }catch(e){ alert('인터넷 연결이 없어 엑셀 변환을 할 수 없습니다. 백업(.json) 파일을 대신 사용하세요.'); return }
+async function buildWB(){
+  await loadXLSX();
   const s=settle(), wb=XLSX.utils.book_new(), A=(a,n)=>XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(a),n);
 
   const b=[[`${S.meta.year}년 ${S.meta.dept} 운영계획`],[],['수입 항목','수입액','','지출 항목','지출액','산출근거']];
@@ -1551,7 +1556,31 @@ async function exportExcel(){
     ['증감 요인 / 협의 내용'],[S.nextYear.note||'']);
   A(n,'새해예산요구');
 
-  XLSX.writeFile(wb, `${S.meta.year}년_${S.meta.dept||'부서'}_회계장부.xlsx`);
+  // 다시 불러올 수 있도록 원본을 숨김 시트에 담아 둔다
+  const json = JSON.stringify(payload());
+  const rows = [[DATATAG]];
+  for(let i=0;i<json.length;i+=30000) rows.push([json.slice(i,i+30000)]);
+  A(rows, DATASHEET);
+  wb.Workbook = wb.Workbook || {};
+  wb.Workbook.Sheets = wb.SheetNames.map(n=>({name:n, Hidden: n===DATASHEET?1:0}));
+  return wb;
+}
+async function xlsxBlob(){
+  const wb = await buildWB();
+  const out = XLSX.write(wb, {bookType:'xlsx', type:'array'});
+  return new Blob([out], {type:XLSXMIME});
+}
+async function readAnyFile(file){
+  if(/\.xlsx$/i.test(file.name)){
+    await loadXLSX();
+    const wb = XLSX.read(new Uint8Array(await file.arrayBuffer()), {type:'array'});
+    const ws = wb.Sheets[DATASHEET];
+    if(!ws) throw new Error('이 엑셀에는 불러올 자료가 없습니다');
+    const rows = XLSX.utils.sheet_to_json(ws, {header:1});
+    if(!rows.length || String(rows[0][0]).trim()!==DATATAG) throw new Error('형식이 다릅니다');
+    return parseFile(rows.slice(1).map(r=>r[0]||'').join(''));
+  }
+  return parseFile(await file.text());
 }
 
 /* ───────── 시작 ───────── */
@@ -1564,5 +1593,6 @@ async function exportExcel(){
   render();
   try{ await loadDeptList(); render() }catch(e){}
   checkUpdate(false);
+  loadXLSX().catch(function(){});      // 저장·공유가 바로 되도록 미리 준비
 })();
 </script>
