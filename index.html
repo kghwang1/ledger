@@ -122,8 +122,7 @@ ol.steps small{color:var(--mute);display:block}
   table.wb{min-width:440px}          /* 예산 */
   table.wn{min-width:700px}          /* 새해예산요구 */
   table.ws{min-width:290px}          /* 현재 상황 */
-  table.wi{min-width:300px}          /* 수입결산 */
-  table.we{min-width:400px}          /* 지출결산 */
+  table.we{min-width:400px}          /* 결산 (수입·지출 같은 폭) */
   table.wi2{min-width:200px}         /* 수입 계획 */
   .navr select{min-width:96px}
 }
@@ -148,7 +147,7 @@ ol.steps small{color:var(--mute);display:block}
   .col{width:100%!important;min-width:0!important;flex:none!important;margin:0 0 6mm}
   .scroll{max-height:none;overflow:visible;border:0;border-radius:0}
   table{width:100%;max-width:100%;font-size:9pt;border-collapse:collapse}
-  table.lg,table.wt,table.wb,table.wn,table.ws,table.wi,table.we,table.wi2{min-width:0!important}
+  table.lg,table.wt,table.wb,table.wn,table.ws,table.we,table.wi2{min-width:0!important}
   .card{overflow:visible!important}
   .swipe{display:none!important}
   .scroll table{font-size:8.6pt}
@@ -499,7 +498,7 @@ function setStatus(t){ const el=document.getElementById('hSt'); if(el) el.textCo
 window.addEventListener('beforeunload', e=>{ if(dirty){ e.preventDefault(); e.returnValue='' } });
 
 /* ───────── 서버(공유) 저장 ───────── */
-const APPVER = '2026.21';
+const APPVER = '2026.23';
 const LIBKEY = 'church_ledger_lib_v1';
 const DATASHEET = '_data', DATATAG = 'CHURCH_LEDGER_V1';
 const XLSXMIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -901,7 +900,7 @@ function vBudget(){
     <div class="col card">
       <h2>수입 계획</h2>
       <p class="hint">첫 번째 항목(이월금)은 결산에서 12월 잔고가 자동으로 들어갑니다.</p>
-      <table class="wi2"><thead><tr><th style="width:59px">항목</th><th class="n" style="width:54px">수입액</th><th style="width:34px"></th></tr></thead><tbody>
+      <table class="wi2"><thead><tr><th style="width:65px">항목</th><th class="n" style="width:49px">수입액</th><th style="width:34px"></th></tr></thead><tbody>
       ${S.incomeItems.map((it,i)=>`<tr>
         <td><input type="text" data-bi="${i}" data-f="name" value="${esc(it.name)}"></td>
         <td class="n"><input type="text" class="n" data-bi="${i}" data-f="budget" value="${won(it.budget)}"></td>
@@ -1039,7 +1038,7 @@ function vLedger(){
             ${rows.map(({e,bal})=>`<tr data-row="${e.id}">
               <td><span class="badge ${e.type==='수입'?'b-in':'b-out'}">${e.type}</span></td>
               <td>${esc(e.cat)||'<span class="badge b-w">미지정</span>'}${e.cat&&!K.has(e.cat)?' <span class="badge b-w">미등록</span>':''}</td>
-              <td>${e.date?e.date.slice(5).replace('-','/'):''}</td>
+              <td>${e.date?e.date.slice(5).replace('-','/'):''}${findPeriod(e.date)!==per?' <span class="badge b-w">기간밖</span>':''}</td>
               <td class="n ${e.type==='수입'?'in':'out'}">${e.type==='수입'?'':'-'}${won(e.amount)}</td>
               <td>${esc(e.note)}</td>
               <td class="n">${won(bal)}</td>
@@ -1112,6 +1111,17 @@ function parseDate(v, defY){
   return y+'-'+String(mo).padStart(2,'0')+'-'+String(da).padStart(2,'0');
 }
 function periodYear(p){ return p.k==='DEC' ? S.meta.year-1 : S.meta.year }
+function findPeriod(iso){                 // 날짜가 어느 기간에 속하는지
+  const m=String(iso||'').match(/^(\d{4})-(\d{2})-\d{2}$/);
+  if(!m) return null;
+  const y=+m[1], mo=+m[2];
+  if(y===S.meta.year-1 && mo===12) return 'DEC';
+  if(y!==S.meta.year) return null;
+  return mo<=3?'Q1' : mo<=6?'Q2' : mo<=9?'Q3' : 'Q4';
+}
+function periodName(k){
+  return k==='DEC' ? `${S.meta.year-1}년 12월` : (P.find(x=>x.k===k)||{}).label;
+}
 function defDate(p){
   const y = p.k==='DEC' ? S.meta.year-1 : S.meta.year;
   const last = ents(p.k).slice(-1)[0];
@@ -1134,7 +1144,7 @@ function vSettle(){
     <div class="row">
       <div class="col">
         <h2 style="font-size:14px">수입 결산</h2>
-        <table class="wi"><thead><tr><th style="width:55px">항목</th><th class="n" style="width:80px">예산</th><th class="n" style="width:80px">수입</th><th class="n" style="width:80px">증감</th></tr></thead><tbody>
+        <table class="we"><thead><tr><th style="width:110px">항목</th><th class="n">예산</th><th class="n">수입</th><th class="n">증감</th></tr></thead><tbody>
         ${s.inc.map((x,i)=>`<tr><td>${esc(x.name)}${i===0?` <span class="hint" style="display:inline">(${S.meta.year-1}년 12월 정산 잔고)</span>`:''}</td>
           <td class="n">${won(x.budget)}</td><td class="n">${won(x.actual)}</td>
           <td class="n ${x.actual-x.budget<0?'out':''}">${won(x.actual-x.budget)}</td></tr>`).join('')}
@@ -1484,11 +1494,23 @@ function bind(){
       if(!amt){ $('#fAmt').focus(); return }
       const iso = parseDate($('#fDate').value, per==='DEC'? S.meta.year-1 : S.meta.year);
       if(!iso){ alert('날짜를 26.02.11 형식으로 넣어 주세요.'); $('#fDate').focus(); return }
+      const tgt = findPeriod(iso);
+      if(!tgt){
+        alert(`${S.meta.year}년 회계기간에 없는 날짜입니다.\n${S.meta.year-1}.12.1 ~ ${S.meta.year}.12.31 사이로 넣어 주세요.`);
+        $('#fDate').focus(); return;
+      }
+      if(tgt !== per && !confirm(`입력 기간이 맞지 않습니다.\n${periodName(tgt)}에 이동하여 저장할까요?`)) return;
+
       const rec={type:ft.value,cat,date:iso,amount:Math.abs(amt),note:$('#fNote').value.trim()};
-      if(editId){ const i=ents(per).findIndex(x=>x.id===editId); S.entries[per][i]=Object.assign({id:editId},rec); lastAdd=editId; editId=null }
-      else { const id=uid(); S.entries[per].push(Object.assign({id},rec)); lastAdd=id }
-      const mo = rec.date? +rec.date.slice(5,7) : 0;      // 걸러져 안 보이면 필터 해제
-      if(mfil && mo!==mfil) mfil=0;
+      if(editId){
+        S.entries[per] = ents(per).filter(x=>x.id!==editId);       // 기간이 바뀌면 옮겨 준다
+        S.entries[tgt].push(Object.assign({id:editId},rec));
+        lastAdd=editId; editId=null;
+      } else {
+        const id=uid(); S.entries[tgt].push(Object.assign({id},rec)); lastAdd=id;
+      }
+      if(tgt !== per){ per = tgt; mfil = 0; }                      // 맞는 기간으로 이동
+      else if(mfil && +iso.slice(5,7)!==mfil) mfil=0;              // 걸러져 안 보이면 필터 해제
       save(); render();
       const a=$('#fAmt'); if(a) a.focus();
     };
