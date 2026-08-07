@@ -491,7 +491,7 @@ function setStatus(t){ const el=document.getElementById('hSt'); if(el) el.textCo
 window.addEventListener('beforeunload', e=>{ if(dirty){ e.preventDefault(); e.returnValue='' } });
 
 /* ───────── 서버(공유) 저장 ───────── */
-const APPVER = '2026.10';
+const APPVER = '2026.11';
 const LIBKEY = 'church_ledger_lib_v1';
 const DATASHEET = '_data', DATATAG = 'CHURCH_LEDGER_V1';
 const XLSXMIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -531,39 +531,42 @@ function applyUpdate(){
   location.replace(baseUrl()+'?v='+Date.now());
 }
 
-async function saveFile(){
+function saveFile(){
   if(ro){ alert('열람 중인 다른 부서 자료는 저장할 수 없습니다.'); return }
   if(!deptName()){ alert('안내 탭 기본 정보에 작성 부서명을 먼저 입력하세요.'); return }
-  try{
-    dl(await xlsxBlob(), fileName('xlsx'));
-    srvMsg = `${fileName('xlsx')} 파일로 저장했습니다. 공유 폴더에 넣어 두세요.`;
-  }catch(e){
-    dl(new Blob([JSON.stringify(payload(),null,1)],{type:'text/csv;charset=utf-8'}), fileName('csv'));
-    srvMsg = `엑셀을 만들 수 없어 ${fileName('csv')} 로 저장했습니다. (인터넷 연결 필요)`;
-  }
+  const r = makeBlob();
+  dl(r.blob, r.name);
+  srvMsg = `${r.name} 파일로 저장했습니다.` + (window.XLSX?' 공유 폴더에 넣어 두세요.':' (엑셀 변환 준비 전이라 예전 형식으로 저장됨)');
   render();
 }
-async function shareFile(){
+function shareFile(){                       // async 를 쓰지 않는다 — 기다리는 사이 공유창이 차단된다
   if(ro){ alert('열람 중인 다른 부서 자료는 공유할 수 없습니다.'); return }
   if(!deptName()){ alert('안내 탭 기본 정보에 작성 부서명을 먼저 입력하세요.'); return }
-  let blob, nm;
-  try{ blob = await xlsxBlob(); nm = fileName('xlsx') }      // 엑셀 — 카톡이 확실하게 '파일'로 처리한다
-  catch(e){
-    blob = new Blob([JSON.stringify(payload(),null,1)],{type:'text/csv;charset=utf-8'});
-    nm = fileName('csv');
+  if(!window.XLSX){
+    loadXLSX().catch(function(){});
+    alert('엑셀 변환 준비 중입니다. 2~3초 뒤 다시 눌러 주세요.');
+    return;
   }
+  let r, f;
   try{
-    const f = new File([blob], nm, {type:blob.type});
-    if(navigator.share && navigator.canShare && navigator.canShare({files:[f]})){
-      await navigator.share({files:[f]});    // 설명 글을 넣으면 카톡이 글자만 보내므로 파일만 전달한다
-      srvMsg = `${nm} 파일을 공유했습니다.`;
-      render(); return;
-    }
-  }catch(e){
-    if(e && (e.name==='AbortError' || e.name==='NotAllowedError')) return;   // 사용자가 취소
+    r = makeBlob();
+    f = new File([r.blob], r.name, {type:r.blob.type});
+  }catch(e){ alert('파일을 만들지 못했습니다: ' + (e && e.message ? e.message : e)); return }
+
+  if(navigator.share && navigator.canShare && navigator.canShare({files:[f]})){
+    navigator.share({files:[f]}).then(function(){
+      srvMsg = `${r.name} 파일을 공유했습니다.`; render();
+    }).catch(function(err){
+      if(err && err.name==='AbortError') return;              // 사용자가 취소한 경우
+      manualShare(r, '공유창이 열리지 않았습니다. (' + (err && err.name ? err.name : '알 수 없음') + ')');
+    });
+    return;
   }
-  dl(blob, nm);                                               // 공유창을 못 여는 환경 (주로 PC)
-  alert(`이 기기에서는 공유창을 바로 열 수 없어 파일을 내려받았습니다.\n\n${nm}\n\n카카오톡에서 보낼 채팅방을 연 뒤 ＋ 버튼 → 파일에서 이 파일을 고르시면 됩니다.`);
+  manualShare(r, '이 기기는 파일 공유창을 지원하지 않습니다.');
+}
+function manualShare(r, why){
+  dl(r.blob, r.name);
+  alert(`${why}\n\n${r.name} 파일을 내려받았습니다.\n\n카카오톡에서 보낼 채팅방을 연 뒤\n＋ 버튼 → 파일 → 이 파일을 고르시면 전송됩니다.`);
 }
 function parseFile(text){                            // 옛 형식(원본 그대로)도 받아들인다
   const o = JSON.parse(text);
@@ -1505,8 +1508,7 @@ function loadXLSX(){
     s.onload=res; s.onerror=rej; document.head.appendChild(s);
   });
 }
-async function buildWB(){
-  await loadXLSX();
+function buildWB(){
   const s=settle(), wb=XLSX.utils.book_new(), A=(a,n)=>XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(a),n);
 
   const b=[[`${S.meta.year}년 ${S.meta.dept} 운영계획`],[],['수입 항목','수입액','','지출 항목','지출액','산출근거']];
@@ -1565,10 +1567,13 @@ async function buildWB(){
   wb.Workbook.Sheets = wb.SheetNames.map(n=>({name:n, Hidden: n===DATASHEET?1:0}));
   return wb;
 }
-async function xlsxBlob(){
-  const wb = await buildWB();
-  const out = XLSX.write(wb, {bookType:'xlsx', type:'array'});
+function xlsxBlob(){                       // 동기 — 사용자 클릭 흐름이 끊기지 않게 한다
+  const out = XLSX.write(buildWB(), {bookType:'xlsx', type:'array'});
   return new Blob([out], {type:XLSXMIME});
+}
+function makeBlob(){                       // 엑셀이 준비됐으면 엑셀, 아니면 예전 형식
+  if(window.XLSX) return {blob:xlsxBlob(), name:fileName('xlsx')};
+  return {blob:new Blob([JSON.stringify(payload(),null,1)],{type:'text/csv;charset=utf-8'}), name:fileName('csv')};
 }
 async function readAnyFile(file){
   if(/\.xlsx$/i.test(file.name)){
