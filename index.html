@@ -112,6 +112,7 @@ ol.steps small{color:var(--mute);display:block}
 .scroll table{font-size:12.5px}
 .scroll thead th{position:sticky;top:0;z-index:1}
 .swipe{display:none;font-size:11.5px;color:var(--mute);margin:6px 0 0}
+.nb{display:block;font-size:11px;color:var(--mute);font-weight:400}
 
 @media screen and (max-width:760px){
   .swipe{display:block}
@@ -120,6 +121,7 @@ ol.steps small{color:var(--mute);display:block}
   table.wt{min-width:560px}          /* 결산·새해예산요구 */
   table.wb{min-width:440px}          /* 예산 */
   table.wn{min-width:700px}          /* 새해예산요구 */
+  table.ws{min-width:290px}          /* 현재 상황 */
   .navr select{min-width:96px}
 }
 .sign{display:flex;gap:26px;justify-content:flex-end;margin-top:26px;font-size:12.5px;color:var(--ink2)}
@@ -143,7 +145,7 @@ ol.steps small{color:var(--mute);display:block}
   .col{width:100%!important;min-width:0!important;flex:none!important;margin:0 0 6mm}
   .scroll{max-height:none;overflow:visible;border:0;border-radius:0}
   table{width:100%;max-width:100%;font-size:9pt;border-collapse:collapse}
-  table.lg,table.wt,table.wb,table.wn{min-width:0!important}
+  table.lg,table.wt,table.wb,table.wn,table.ws{min-width:0!important}
   .card{overflow:visible!important}
   .swipe{display:none!important}
   .scroll table{font-size:8.6pt}
@@ -433,6 +435,9 @@ const P = [
   {k:'Q4', label:'4분기', d:y=>`${y}년 10~12월`, m:[10,11,12]},
 ];
 const PERIOD = y => `${y}.1.1 ~ ${y}.12.31`;
+function pLabel(p){                       // 전년 12월은 25.12. 처럼 연·월로 표시
+  return p.k==='DEC' ? String(S.meta.year-1).slice(2)+'.12.' : p.label;
+}
 function pHead(title,sub){
   return `<div class="print-only phead"><div class="ph-c">${esc(S.meta.church||'')}</div>
     <div class="ph-t">${esc(title)}</div><div class="ph-s">${esc(sub||'')}</div></div>`;
@@ -491,7 +496,7 @@ function setStatus(t){ const el=document.getElementById('hSt'); if(el) el.textCo
 window.addEventListener('beforeunload', e=>{ if(dirty){ e.preventDefault(); e.returnValue='' } });
 
 /* ───────── 서버(공유) 저장 ───────── */
-const APPVER = '2026.15';
+const APPVER = '2026.18';
 const LIBKEY = 'church_ledger_lib_v1';
 const DATASHEET = '_data', DATATAG = 'CHURCH_LEDGER_V1';
 const XLSXMIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -928,8 +933,7 @@ function vBudget(){
 function vStatus(){
   const s=settle();
   const rows = P.map(p=>({
-    label: p.k==='DEC' ? `작년 12월` : p.label,
-    sub: p.d(S.meta.year),
+    label: pLabel(p),
     inc: ents(p.k).filter(e=>e.type==='수입').reduce((t,e)=>t+e.amount,0),
     exp: ents(p.k).filter(e=>e.type==='지출').reduce((t,e)=>t+e.amount,0),
     bal: closing(p.k)
@@ -940,12 +944,12 @@ function vStatus(){
   ${pBar()}
   <div class="card">
     <h2>기간별 현황</h2>
-    <table class="wt"><thead><tr><th style="width:110px">기간</th>
-      <th class="n" style="width:110px">수입</th><th class="n" style="width:110px">지출</th>
-      <th class="n" style="width:120px">잔고</th></tr></thead><tbody>
-      <tr class="sub"><td>이월<div class="hint" style="margin:0">${S.meta.year-1}년 11월 말</div></td>
+    <table class="ws"><thead><tr><th style="width:55px">기간</th>
+      <th class="n" style="width:70px">수입</th><th class="n" style="width:70px">지출</th>
+      <th class="n" style="width:77px">잔고</th></tr></thead><tbody>
+      <tr class="sub"><td>이월<span class="nb">(11월 잔고)</span></td>
         <td class="n">-</td><td class="n">-</td><td class="n">${won(S.openingBalance)}</td></tr>
-      ${rows.map(r=>`<tr><td>${esc(r.label)}<div class="hint" style="margin:0">${esc(r.sub)}</div></td>
+      ${rows.map(r=>`<tr><td>${esc(r.label)}</td>
         <td class="n ${r.inc?'in':''}">${r.inc?won(r.inc):'-'}</td>
         <td class="n ${r.exp?'out':''}">${r.exp?won(r.exp):'-'}</td>
         <td class="n">${won(r.bal)}</td></tr>`).join('')}
@@ -969,7 +973,7 @@ function vStatus(){
 function vLedger(){
   const chips = `<div class="chips no-print">
     <button class="chip ${per==='SUM'?'on':''}" data-per="SUM">현재 상황</button>
-    ${P.map(x=>`<button class="chip ${x.k===per?'on':''}" data-per="${x.k}" title="${x.d(S.meta.year)}">${x.label}</button>`).join('')}
+    ${P.map(x=>`<button class="chip ${x.k===per?'on':''}" data-per="${x.k}" title="${x.d(S.meta.year)}">${pLabel(x)}</button>`).join('')}
   </div>`;
   if(per==='SUM') return chips + vStatus();
   const p = P.find(x=>x.k===per);
@@ -995,7 +999,7 @@ function vLedger(){
   ${chips}
 
   <div class="card">
-    <h2 class="no-print">${p.label} 수입 및 지출 내역 <span class="hint" style="display:inline">${p.d(S.meta.year)}</span></h2>
+    <h2 class="no-print">${pLabel(p)} 수입 및 지출 내역 <span class="hint" style="display:inline">${p.d(S.meta.year)}</span></h2>
     ${p.prev?`<div class="note no-print"><b>${S.meta.year-1}년 12월은 별도 정산입니다.</b> 작년 결산에서 가결산으로 잡아 두었던 12월을 실제 집행한 내역이며, ${S.meta.year}년 결산(1~12월)에는 포함되지 않고 따로 보고합니다. 여기서 나온 잔고가 ${S.meta.year}년 이월금이 됩니다.</div>`:''}
 
     <div class="form no-print no-ro">
@@ -1037,14 +1041,14 @@ function vLedger(){
               <td>${esc(e.note)}</td>
               <td class="n">${won(bal)}</td>
               <td class="c no-print no-ro"><button class="btn g sm" data-ed="${e.id}">✎</button> <button class="btn dg sm" data-rm="${e.id}">×</button></td></tr>`).join('')}
-            <tr class="tot"><td colspan="3">${p.label} 잔고</td><td class="n">${won(net(per))}</td><td></td><td class="n">${won(closing(per))}</td><td class="no-print"></td></tr>
+            <tr class="tot"><td colspan="3">${pLabel(p)} 잔고</td><td class="n">${won(net(per))}</td><td></td><td class="n">${won(closing(per))}</td><td class="no-print"></td></tr>
           </tbody></table></div>
         ${rows.length===0?'<p class="hint" style="margin-top:10px">아직 기록이 없습니다. 위 입력창에서 추가하세요.</p>':'<p class="swipe">← 표를 옆으로 밀면 산출근거와 잔액을 볼 수 있습니다 →</p>'}
       </div>
 
       <div class="col" style="flex:2;min-width:280px">
         <div class="card" style="margin:0">
-          <h2 style="font-size:14px">${p.label} 정산</h2>
+          <h2 style="font-size:14px">${pLabel(p)} 정산</h2>
           <div class="kv"><span>${per==='DEC'?`${S.meta.year-1}년 11월 말 잔고`:per==='Q1'?'이월금':'전 분기 잔고'}</span><b>${won(opening(per))}</b></div>
           <div class="kv"><span class="in">수입 계</span><b class="in">${won(incTot)}</b></div>
           <div class="kv"><span class="out">지출 계</span><b class="out">-${won(expTot)}</b></div>
@@ -1600,11 +1604,11 @@ function buildWB(){
     let bal=opening(p.k);
     a.push(['',p.k==='DEC'?`${S.meta.year-1}년 11월 이월금`:'전 분기 잔고','',bal,'',bal]);
     sorted(p.k).forEach(e=>{ bal+=sgn(e); a.push([e.type,e.cat,e.date,sgn(e),e.note,bal]) });
-    a.push([`${p.label} 잔고`,'','',net(p.k),'',closing(p.k)]);
+    a.push([`${pLabel(p)} 잔고`,'','',net(p.k),'',closing(p.k)]);
     a.push([],['항목별 소계'],['구분','항목','소계','누계']);
     S.incomeItems.slice(1).forEach(i=>a.push(['수입',i.name,catAmt(p.k,i.name,false),p.k==='DEC'?'':cumAmt(p.k,i.name,false)]));
     S.expenseItems.forEach(i=>a.push(['지출',i.name,catAmt(p.k,i.name,true),p.k==='DEC'?'':cumAmt(p.k,i.name,true)]));
-    A(a,p.label);
+    A(a,pLabel(p));
   });
 
   const c=[[`${S.meta.year}년 ${S.meta.dept} 결산 보고서`],[],
