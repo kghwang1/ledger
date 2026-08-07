@@ -491,7 +491,7 @@ function setStatus(t){ const el=document.getElementById('hSt'); if(el) el.textCo
 window.addEventListener('beforeunload', e=>{ if(dirty){ e.preventDefault(); e.returnValue='' } });
 
 /* ───────── 서버(공유) 저장 ───────── */
-const APPVER = '2026.7';
+const APPVER = '2026.8';
 const LIBKEY = 'church_ledger_lib_v1';
 let LIB = {};                                       // 다른 부서 파일 보관소
 const SRV = !!window.storage;                       // Claude 앱 안에서만 서버 저장 가능
@@ -541,18 +541,18 @@ async function shareFile(){
   if(!deptName()){ alert('안내 탭 기본 정보에 작성 부서명을 먼저 입력하세요.'); return }
   const txt = JSON.stringify(payload(),null,1);
   const nm = fileName();                                        // .txt — 공유 가능한 형식
-  const msg = `${S.meta.year}년 ${deptName()} 회계자료입니다. (${new Date().toLocaleDateString('ko-KR')})`;
   try{
     const f = new File([txt], nm, {type:'text/plain'});
     if(navigator.share && navigator.canShare && navigator.canShare({files:[f]})){
-      await navigator.share({files:[f], title:nm, text:msg});   // 공유창 → 카카오톡 → 채팅방 선택
-      srvMsg = '공유창을 열었습니다.'; render(); return;
+      await navigator.share({files:[f]});    // 설명 글을 넣으면 카톡이 글자만 보내므로 파일만 전달한다
+      srvMsg = `${nm} 파일을 공유했습니다. 파일이 안 가고 글자만 갔다면 [저장] 후 카톡에서 ＋ → 파일로 보내세요.`;
+      render(); return;
     }
   }catch(e){
     if(e && (e.name==='AbortError' || e.name==='NotAllowedError')) return;   // 사용자가 취소
   }
   dl(new Blob([txt],{type:'text/plain;charset=utf-8'}), nm);    // 공유창을 못 여는 환경 (주로 PC)
-  alert(`이 기기에서는 공유창을 바로 열 수 없어 파일을 내려받았습니다.\n\n${nm}\n\n카카오톡에서 보낼 채팅방을 연 뒤 이 파일을 첨부하시면 됩니다.`);
+  alert(`이 기기에서는 공유창을 바로 열 수 없어 파일을 내려받았습니다.\n\n${nm}\n\n카카오톡에서 보낼 채팅방을 연 뒤 ＋ 버튼 → 파일에서 이 파일을 고르시면 됩니다.`);
 }
 function parseFile(text){                            // 옛 형식(원본 그대로)도 받아들인다
   const o = JSON.parse(text);
