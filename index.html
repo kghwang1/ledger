@@ -496,7 +496,7 @@ function setStatus(t){ const el=document.getElementById('hSt'); if(el) el.textCo
 window.addEventListener('beforeunload', e=>{ if(dirty){ e.preventDefault(); e.returnValue='' } });
 
 /* ───────── 서버(공유) 저장 ───────── */
-const APPVER = '2026.18';
+const APPVER = '2026.19';
 const LIBKEY = 'church_ledger_lib_v1';
 const DATASHEET = '_data', DATATAG = 'CHURCH_LEDGER_V1';
 const XLSXMIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -999,8 +999,8 @@ function vLedger(){
   ${chips}
 
   <div class="card">
-    <h2 class="no-print">${pLabel(p)} 수입 및 지출 내역 <span class="hint" style="display:inline">${p.d(S.meta.year)}</span></h2>
-    ${p.prev?`<div class="note no-print"><b>${S.meta.year-1}년 12월은 별도 정산입니다.</b> 작년 결산에서 가결산으로 잡아 두었던 12월을 실제 집행한 내역이며, ${S.meta.year}년 결산(1~12월)에는 포함되지 않고 따로 보고합니다. 여기서 나온 잔고가 ${S.meta.year}년 이월금이 됩니다.</div>`:''}
+    <h2 class="no-print">${p.prev?`${String(S.meta.year-1).slice(2)}년 12월 수입 및 지출 내역`:`${pLabel(p)} 수입 및 지출 내역 <span class="hint" style="display:inline">${p.d(S.meta.year)}</span>`}</h2>
+    ${p.prev?`<div class="note no-print">작년 결산에서 가결산으로 잡아 두었던 12월을 실제 집행한 내역이며, ${S.meta.year}년 결산(1~12월)에는 포함되지 않고 따로 보고합니다.</div>`:''}
 
     <div class="form no-print no-ro">
       <div class="fr">
