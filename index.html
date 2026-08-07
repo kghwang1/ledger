@@ -447,14 +447,14 @@ let ro=false, roName='', mine=null, deptList=[], lastAdd=null, srvMsg='';
 
 function uid(){ return Math.random().toString(36).slice(2,9) }
 function fresh(){
-  return {meta:{year:new Date().getFullYear(),dept:'',church:'',url:''},openingBalance:0,
+  return {meta:{year:new Date().getFullYear(),dept:'',church:'',url:'',server:'',serverKey:''},openingBalance:0,
     incomeItems:[{name:'이월금',budget:0}],expenseItems:[],
     entries:{DEC:[],Q1:[],Q2:[],Q3:[],Q4:[]},
     nextYear:{expense:{},income:{},basis:{},extraExp:[],extraInc:[],dec:0,note:''}};
 }
 function norm(s){
   s = Object.assign(fresh(), s||{});
-  s.meta = Object.assign({year:2026,dept:'',church:'',url:''}, s.meta);
+  s.meta = Object.assign({year:2026,dept:'',church:'',url:'',server:'',serverKey:''}, s.meta);
   if(!String(s.meta.url||'').trim()) s.meta.url = HOME_URL;   // 배포 주소 기본값
   s.nextYear = Object.assign({expense:{},income:{},basis:{},extraExp:[],extraInc:[],dec:0,note:''}, s.nextYear);
   s.nextYear.extraExp = (s.nextYear.extraExp||[]).map(x=>({name:x.name||'',amt:+x.amt||0,basis:x.basis||''}));
@@ -491,12 +491,18 @@ function setStatus(t){ const el=document.getElementById('hSt'); if(el) el.textCo
 window.addEventListener('beforeunload', e=>{ if(dirty){ e.preventDefault(); e.returnValue='' } });
 
 /* ───────── 서버(공유) 저장 ───────── */
-const APPVER = '2026.12';
+const APPVER = '2026.13';
 const LIBKEY = 'church_ledger_lib_v1';
 const DATASHEET = '_data', DATATAG = 'CHURCH_LEDGER_V1';
 const XLSXMIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 let LIB = {};                                       // 다른 부서 파일 보관소
-const SRV = !!window.storage;                       // Claude 앱 안에서만 서버 저장 가능
+/* ▼▼▼ 서버 설정 — 총무님이 앱스 스크립트를 배포한 뒤 이 두 줄만 고치시면 됩니다 ▼▼▼ */
+const SERVER_URL = '';                              // 예: https://script.google.com/macros/s/AKfy.../exec
+const SERVER_KEY = 'church2026';                    // 앱스 스크립트의 PASSWORD 와 같은 값
+/* ▲▲▲ 여기까지 ▲▲▲ */
+function serverUrl(){ return String((S.meta&&S.meta.server)||SERVER_URL||'').trim() }
+function serverKey(){ return String((S.meta&&S.meta.serverKey)||SERVER_KEY||'') }
+function serverOn(){ return /^https?:\/\//.test(serverUrl()) }
 
 /* ── 파일 저장 / 열기 ── */
 function deptName(){ return (S.meta.dept||'').trim() }
@@ -628,50 +634,69 @@ async function readFolder(){
 
 /* ── 열람 목록 (파일 보관소 + 서버) ── */
 function sources(){
-  const out = Object.keys(LIB).map(k=>({id:'file:'+k, name:LIB[k].name, year:LIB[k].year, at:LIB[k].at, from:'file'}));
+  const out = [];
   deptList.forEach(x=>{
-    if(!out.some(o=>o.name===x.name && o.year===x.year))
-      out.push({id:'srv:'+x.key, name:x.name, year:x.year, at:x.at, from:'server'});
+    out.push({id:'srv:'+x.name+'|'+x.year, name:x.name, year:x.year, at:x.at, from:'server'});
+  });
+  Object.keys(LIB).forEach(k=>{
+    const L=LIB[k];
+    if(!out.some(o=>o.name===L.name && o.year===L.year))
+      out.push({id:'file:'+k, name:L.name, year:L.year, at:L.at, from:'file'});
   });
   out.sort((a,b)=> a.name===b.name ? b.year-a.year : a.name.localeCompare(b.name,'ko'));
   return out;
 }
 
-const skey = n => 'dept:'+String(n).trim().replace(/[\s'"\/\\]/g,'_')+'_';
-async function sGet(k){ try{ const r=await window.storage.get(k,true); return r? JSON.parse(r.value):null }catch(e){ return null } }
-async function sSet(k,v){ await window.storage.set(k, JSON.stringify(v), true) }
-
-async function loadDeptList(){
-  if(!SRV) return;
-  const l = await sGet('depts_index');
-  deptList = Array.isArray(l)? l : [];
+/* ── 서버 통신 (구글 앱스 스크립트) ── */
+async function api(action, body){
+  if(!serverOn()) throw new Error('서버 주소가 설정되지 않았습니다');
+  const r = await fetch(serverUrl(), {
+    method:'POST',
+    headers:{'Content-Type':'text/plain;charset=utf-8'},   // 이렇게 해야 사전 요청 없이 통한다
+    body: JSON.stringify(Object.assign({key:serverKey(), action:action}, body||{}))
+  });
+  let j;
+  try{ j = await r.json() }catch(e){ throw new Error('서버 응답을 읽을 수 없습니다') }
+  if(!j.ok) throw new Error(j.error||'서버 오류');
+  return j;
 }
-async function srvSave(){
-  if(!SRV){ alert('서버 저장은 Claude 앱 안에서만 됩니다.\n[파일 저장]으로 파일을 만들어 공유 폴더에 넣으세요.'); return }
-  if(ro){ alert('열람 중인 다른 부서 자료는 저장할 수 없습니다.'); return }
-  const name=deptName();
-  if(!name){ alert('안내 탭 기본 정보에 작성 부서명을 먼저 입력하세요.'); return }
-  if(!confirm(`${S.meta.year}년 ${name} 자료를 서버에 저장합니다.\n같은 프로그램을 쓰는 다른 부서도 열람할 수 있습니다. 계속할까요?`)) return;
-  const key = skey(name)+S.meta.year;
+async function loadDeptList(){
+  if(!serverOn()){ deptList=[]; return }
+  try{ const j = await api('list'); deptList = j.list||[] }
+  catch(e){ deptList=[] }
+}
+async function srvSave(silent){
+  if(ro){ alert('열람 중인 다른 부서 자료는 저장할 수 없습니다.'); return false }
+  if(!serverOn()){ if(!silent) alert('서버 주소가 설정되지 않았습니다.\n데이터 탭에서 주소를 넣어 주세요.'); return false }
+  if(!deptName()){ alert('안내 탭 기본 정보에 작성 부서명을 먼저 입력하세요.'); return false }
+  setStatus('서버에 저장 중…');
   try{
-    await sSet(key, {name, year:S.meta.year, at:Date.now(), data:S});
-    const idx = deptList.filter(x=>x.key!==key);
-    idx.push({key, name, year:S.meta.year, at:Date.now()});
-    idx.sort((a,b)=> a.name===b.name ? b.year-a.year : a.name.localeCompare(b.name,'ko'));
-    await sSet('depts_index', idx); deptList=idx;
-    srvMsg=`서버에 저장했습니다 · ${nowT()}`; render();
-  }catch(e){ alert('서버 저장에 실패했습니다. 잠시 후 다시 시도하세요.') }
+    await api('save', {name:deptName(), year:S.meta.year, data:S});
+    await loadDeptList();
+    srvMsg = `${S.meta.year}년 ${deptName()} 자료를 서버에 저장했습니다 · ${nowT()}`;
+    setStatus('서버 저장됨 · '+nowT()); render(); return true;
+  }catch(e){
+    setStatus('⚠ 서버 저장 실패');
+    alert('서버에 저장하지 못했습니다.\n\n'+(e&&e.message?e.message:e)+'\n\n[엑셀] 버튼으로 파일을 만들어 두세요.');
+    return false;
+  }
 }
 async function srvLoad(){
-  if(!SRV){ alert('서버 불러오기는 Claude 앱 안에서만 됩니다.\n[파일 열기]로 저장해 둔 파일을 여세요.'); return }
-  const name=deptName();
-  if(!name){ alert('안내 탭 기본 정보에 작성 부서명을 먼저 입력하세요.'); return }
-  const rec = await sGet(skey(name)+S.meta.year);
-  if(!rec){ alert(`서버에 ${S.meta.year}년 ${name} 자료가 없습니다.`); return }
-  if(!confirm(`서버에 저장된 ${S.meta.year}년 ${name} 자료를 불러옵니다.\n지금 화면의 내용은 사라집니다. 계속할까요?`)) return;
-  S = norm(rec.data); ro=false; mine=null; editId=null;
-  save(); srvMsg=`서버에서 불러왔습니다 · ${nowT()}`; render();
+  if(!serverOn()){ alert('서버 주소가 설정되지 않았습니다.'); return }
+  if(!deptName()){ alert('안내 탭 기본 정보에 작성 부서명을 먼저 입력하세요.'); return }
+  try{
+    const j = await api('get', {name:deptName(), year:S.meta.year});
+    if(!confirm(`서버에 저장된 ${S.meta.year}년 ${deptName()} 자료를 불러옵니다.\n지금 화면의 내용은 사라집니다. 계속할까요?`)) return;
+    S = norm(j.rec.data); ro=false; mine=null; editId=null; save();
+    srvMsg = `서버에서 불러왔습니다 · ${nowT()}`; tab='guide'; render();
+  }catch(e){ alert('불러오지 못했습니다.\n\n'+(e&&e.message?e.message:e)) }
 }
+async function srvTest(){
+  if(!serverOn()){ alert('먼저 서버 주소를 넣어 주세요.'); return }
+  try{ const j = await api('ping'); alert(`서버와 연결되었습니다.\n저장 폴더: ${j.folder}`); await loadDeptList(); render() }
+  catch(e){ alert('연결하지 못했습니다.\n\n'+(e&&e.message?e.message:e)+'\n\n· 주소가 /exec 로 끝나는지\n· 액세스 권한이 [모든 사용자] 인지\n· 암호가 같은지 확인해 주세요.') }
+}
+
 async function readDept(id){
   const v = id || '';
   if(!v){                                   // 내 부서 자료로 복귀
@@ -680,7 +705,11 @@ async function readDept(id){
   }
   let rec=null;
   if(v.indexOf('file:')===0) rec = LIB[v.slice(5)];
-  else rec = await sGet(v.slice(4));
+  else{
+    const p = v.slice(4).split('|');
+    try{ const j = await api('get', {name:p[0], year:Number(p[1])}); rec = j.rec }
+    catch(e){ alert('불러오지 못했습니다.\n\n'+(e&&e.message?e.message:e)); return }
+  }
   if(!rec){ alert('해당 부서 자료를 찾을 수 없습니다.'); return }
   if(!ro) mine = S;
   S = norm(rec.data); ro=true; roName = rec.name;
@@ -747,7 +776,7 @@ function render(){
 
   document.getElementById('nav').innerHTML =
     TABS.map(([k,l])=>`<button data-tab="${k}" class="${tab===k?'on':''}">${l}</button>`).join('')
-    + `<div class="navr">${ro?'':'<button id="navSave" class="nsave">저장</button><button id="navShare" class="nsave alt">공유</button>'}
+    + `<div class="navr">${ro?'':'<button id="navSave" class="nsave">저장</button><button id="navXls" class="nsave alt">엑셀</button>'}
        <input type="file" id="deptFiles" multiple accept=".xlsx,.csv,.txt,.json" style="display:none">
        <input type="file" id="myFile" accept=".xlsx,.csv,.txt,.json" style="display:none"></div>`;
 
@@ -764,9 +793,9 @@ function render(){
     ({guide:vGuide,budget:vBudget,ledger:vLedger,settle:vSettle,next:vNext,data:vData})[tab]();
   document.querySelectorAll('#nav button[data-tab]').forEach(b=>b.onclick=()=>{tab=b.dataset.tab;render();window.scrollTo(0,0)});
   const nsv = document.getElementById('navSave');
-  if(nsv) nsv.onclick = saveFile;
-  const nsh = document.getElementById('navShare');
-  if(nsh) nsh.onclick = shareFile;
+  if(nsv) nsv.onclick = ()=>{ serverOn()? srvSave() : saveFile() };
+  const nsh = document.getElementById('navXls');
+  if(nsh) nsh.onclick = saveFile;
   document.getElementById('deptFiles').onchange = e=>{ openDeptFiles(e.target.files); e.target.value='' };
   document.getElementById('myFile').onchange = e=>{ if(e.target.files[0]) openMyFile(e.target.files[0]); e.target.value='' };
   bind();
@@ -1195,12 +1224,27 @@ function vData(){
   const s=settle();
   const mode = window.storage ? 'Claude 앱 내부 저장소' : '이 브라우저';
   const cnt = P.reduce((t,p)=>t+ents(p.k).length,0);
-  const lib = sources().filter(x=>x.from==='file');
+  const all = sources(), lib = all.filter(x=>x.from==='file');
   return `
   ${pHead(`${S.meta.year}년 ${S.meta.dept} 데이터 관리`, `회계기간 ${PERIOD(S.meta.year)}`)}
 
   <div class="card">
-    <h2>내 부서 자료 저장</h2>
+    <h2>서버 저장 ${serverOn()?'<span class="badge b-ok">연결됨</span>':'<span class="badge b-w">주소 필요</span>'}</h2>
+    <p class="hint">저장 버튼을 누르면 자료가 인터넷에 올라가고, 다른 부서도 아래 목록에서 바로 볼 수 있습니다.</p>
+    <div class="tools no-ro">
+      <button class="btn" id="sSaveBtn">서버에 저장</button>
+      <button class="btn g" id="sLoadBtn">서버에서 불러오기</button>
+      <button class="btn g" id="sTestBtn">연결 확인</button>
+    </div>
+    <div style="margin-top:12px">
+      <label class="hint" style="margin:0">서버 주소 <span style="opacity:.7">(총무님이 배포한 앱스 스크립트 웹앱 주소)</span></label>
+      <input type="text" data-meta="server" value="${esc(S.meta.server||'')}" placeholder="${SERVER_URL||'https://script.google.com/macros/s/.../exec'}">
+    </div>
+    <p class="hint" style="margin:8px 0 0">${SERVER_URL?`프로그램에 주소가 들어 있습니다. 위 칸은 비워 두시면 그대로 쓰입니다.`:`아직 프로그램에 주소가 없습니다. 위 칸에 넣으면 이 기기에서만 쓰입니다.`}</p>
+  </div>
+
+  <div class="card">
+    <h2>엑셀 파일로 보관</h2>
     <div class="kv"><span>저장될 파일 이름</span><b>${esc(fileName())}</b></div>
     <div class="kv"><span>자동 저장 (작업 중 임시 보관)</span><b>${mode}</b></div>
     <div class="kv" style="border:0"><span>현재 보관 중인 거래</span><b>${cnt}건</b></div>
@@ -1210,42 +1254,34 @@ function vData(){
       <button class="btn g" id="fOpen">파일 열기</button>
     </div>
     <div class="note" style="margin-top:12px">
-      입력하는 동안은 이 기기에 자동 보관되지만, <b>기록을 마치면 반드시 저장</b>하세요.
-      화면 맨 위 <b>저장</b> 버튼을 눌러도 되고, 아래 [파일로 저장]을 눌러도 같습니다.
-      <b>공유</b> 버튼은 만든 파일을 그 자리에서 카카오톡 등으로 보냅니다.
-      만들어진 파일을 <b>공유 폴더</b>(구글 드라이브·원드라이브 등)에 넣어 두면 다른 부서도 볼 수 있습니다.
-      파일은 <b>엑셀(.xlsx)</b>이라 그냥 열어 보실 수도 있고, 이 프로그램에서 <b>파일 열기</b>로 다시 불러올 수도 있습니다.
-      브라우저 데이터를 지우면 자동 보관분은 사라지지만, 저장해 둔 파일은 그대로 남습니다.
+      결산 서류 제출이나 개인 백업용입니다. 파일은 <b>엑셀(.xlsx)</b>이라 그냥 열어 보실 수도 있고,
+      이 프로그램에서 <b>파일 열기</b>로 다시 불러올 수도 있습니다.
+      인터넷이 안 될 때도 이 방법으로 자료를 옮길 수 있습니다.
     </div>
   </div>
 
   <div class="card">
     <h2>다른 부서 자료 보기</h2>
-    <p class="hint">공유 폴더에 모인 부서 파일들을 읽어 두면 아래 목록에 쌓이고, <b>열람</b> 버튼으로 언제든 볼 수 있습니다.</p>
+    <p class="hint">서버에 저장된 부서가 자동으로 나타납니다. 엑셀 파일을 받으셨다면 [부서 파일 읽기]로 추가할 수도 있습니다.</p>
     <div class="tools">
-      <button class="btn" id="libAdd">부서 파일 읽기</button>
+      <button class="btn g" id="sRefresh">목록 새로고침</button>
+      <button class="btn g" id="libAdd">부서 파일 읽기</button>
       ${window.showDirectoryPicker?`<button class="btn g" id="libFolder">폴더 통째로 읽기</button>`:''}
-      ${lib.length?`<button class="btn g" id="libClear">목록 비우기</button>`:''}
+      ${lib.length?`<button class="btn g" id="libClear">받은 파일 목록 비우기</button>`:''}
     </div>
-    ${lib.length? `<table style="margin-top:12px"><thead><tr><th>부서</th><th class="c" style="width:80px">회계연도</th><th style="width:130px">저장일</th><th class="c" style="width:130px"></th></tr></thead><tbody>
-      ${lib.map(x=>`<tr><td>${esc(x.name)}</td><td class="c">${x.year}년</td>
+    ${all.length? `<table style="margin-top:12px"><thead><tr><th>부서</th><th class="c" style="width:74px">연도</th><th style="width:120px">저장일</th><th class="c" style="width:60px">위치</th><th class="c" style="width:120px"></th></tr></thead><tbody>
+      ${all.map(x=>`<tr><td>${esc(x.name)}</td><td class="c">${x.year}년</td>
         <td>${x.at? new Date(x.at).toLocaleDateString('ko-KR') : '-'}</td>
+        <td class="c"><span class="badge ${x.from==='server'?'b-ok':'b-w'}">${x.from==='server'?'서버':'파일'}</span></td>
         <td class="c"><button class="btn g sm" data-lib-read="${esc(x.id)}">열람</button>
-          <button class="btn dg sm" data-lib-del="${esc(x.id)}">×</button></td></tr>`).join('')}
+          ${x.from==='file'?`<button class="btn dg sm" data-lib-del="${esc(x.id)}">×</button>`:''}</td></tr>`).join('')}
       </tbody></table>`
-      : `<p class="hint" style="margin-top:10px">아직 읽어 둔 부서 파일이 없습니다. 공유 폴더에서 <b>${String(S.meta.year).slice(2)}회계</b> 파일들을 한꺼번에 선택하세요.</p>`}
+      : `<p class="hint" style="margin-top:10px">${serverOn()?'아직 서버에 저장된 부서가 없습니다.':'서버 주소를 넣으면 부서 목록이 나타납니다.'}</p>`}
     <div class="note" style="margin-top:12px">
-      파일 선택 창에서 <b>Ctrl+A</b>(전체 선택)로 여러 부서 파일을 한 번에 읽을 수 있습니다.
-      같은 부서 파일을 다시 읽으면 <b>최신 것으로 바뀝니다.</b> 다른 부서 자료는 보기만 되고 고칠 수 없습니다.
+      다른 부서 자료는 <b>보기만 되고 고칠 수 없습니다.</b>
+      같은 부서가 다시 저장하면 항상 최신 것으로 바뀝니다.
     </div>
   </div>
-
-  ${SRV?`<div class="card">
-    <h2>서버 저장 <span class="badge b-ok">Claude 앱</span></h2>
-    <p class="hint">Claude 앱에서 열었을 때만 쓸 수 있습니다. 내려받아 쓰실 때는 위의 파일 방식을 이용하세요.</p>
-    <div class="tools no-ro"><button class="btn g" id="sSaveBtn">서버에 저장</button>
-      <button class="btn g" id="sLoadBtn">서버에서 불러오기</button></div>
-  </div>`:''}
 
   <div class="card">
     <h2>새 회계연도 시작</h2>
@@ -1471,8 +1507,10 @@ function bind(){
   on('[data-lib-del]','click',e=>{ delete LIB[e.target.dataset.libDel.slice(5)]; saveLib(); render() });
   if($('#chkUpd')) $('#chkUpd').onclick=()=>checkUpdate(true);
   if($('#doUpd2')) $('#doUpd2').onclick=applyUpdate;
-  if($('#sSaveBtn')) $('#sSaveBtn').onclick=srvSave;
+  if($('#sSaveBtn')) $('#sSaveBtn').onclick=()=>srvSave();
   if($('#sLoadBtn')) $('#sLoadBtn').onclick=srvLoad;
+  if($('#sTestBtn')) $('#sTestBtn').onclick=srvTest;
+  if($('#sRefresh')) $('#sRefresh').onclick=async()=>{ await loadDeptList(); srvMsg='목록을 새로 읽었습니다.'; render() };
   if($('#newYear')) $('#newYear').onclick=()=>{
     if(!confirm(`${S.meta.year+1}년 장부를 새로 시작합니다. 현재 기록은 사라집니다. 백업하셨나요?`)) return;
     const s=settle(), y=S.meta.year+1;
@@ -1602,7 +1640,7 @@ async function readAnyFile(file){
   if(raw){ try{ S=norm(JSON.parse(raw)) }catch(e){ S=norm(typeof SEED!=='undefined'?SEED:fresh()) } }
   else { S=norm(typeof SEED!=='undefined'?SEED:fresh()); await store.set(KEY, JSON.stringify(S)) }
   try{ const l=await store.get(LIBKEY); if(l) LIB=JSON.parse(l)||{} }catch(e){ LIB={} }
-  setStatus('임시 보관됨');
+  setStatus(serverOn()?'서버 연결됨':'임시 보관됨');
   render();
   try{ await loadDeptList(); render() }catch(e){}
   checkUpdate(false);
