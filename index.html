@@ -1,0 +1,1400 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>부서 회계장부</title>
+<style>
+:root{
+  --ink:#1c2333; --ink2:#4a5468; --mute:#8792a8;
+  --line:#e2e5ec; --line2:#eef0f5;
+  --paper:#ffffff; --bg:#f4f2ee;
+  --accent:#2f5d50; --accent-l:#e8f0ed;
+  --in:#1d6b4f; --in-bg:#e9f5ef;
+  --out:#b03a3a; --out-bg:#fcecec;
+  --warn:#a76b19; --warn-bg:#fdf3e2;
+  --r:10px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--bg); color:var(--ink);
+  font-family:"Pretendard","Apple SD Gothic Neo","Malgun Gothic","맑은 고딕",system-ui,sans-serif;
+  font-size:14px; line-height:1.55; -webkit-text-size-adjust:100%;
+}
+.wrap{max-width:1180px;margin:0 auto;padding:0 16px 80px}
+header{background:var(--accent);color:#fff;padding:14px 0 0}
+header .wrap{padding-bottom:0}
+.hd{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;padding-bottom:12px}
+.hd h1{font-size:19px;margin:0;font-weight:700;letter-spacing:-.02em}
+.hd .sub{font-size:12.5px;opacity:.82}
+.hd .st{margin-left:auto;font-size:12px;opacity:.8}
+nav{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none}
+nav::-webkit-scrollbar{display:none}
+nav button{
+  background:transparent;border:0;color:#fff;opacity:.72;cursor:pointer;
+  padding:9px 15px;font-size:13.5px;font-family:inherit;white-space:nowrap;
+  border-radius:8px 8px 0 0;font-weight:600;
+}
+nav button:hover{opacity:1;background:rgba(255,255,255,.1)}
+nav button.on{opacity:1;background:var(--bg);color:var(--accent)}
+.navr{margin-left:auto;display:flex;align-items:center;gap:6px;padding:0 0 6px 10px;flex-shrink:0}
+.navr label{font-size:11.5px;opacity:.85;white-space:nowrap}
+.navr select{width:auto;min-width:118px;padding:4px 8px;border:0;border-radius:6px;font-size:12.5px}
+.navr button{padding:5px 12px;border-radius:6px;background:rgba(255,255,255,.18);opacity:1;font-size:12.5px}
+.navr button:hover{background:rgba(255,255,255,.32)}
+.robar{background:var(--warn-bg);border:1px solid #f0dcb8;color:#7a4f13;border-radius:var(--r);
+  padding:10px 14px;margin-bottom:14px;font-size:13px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+tr.hl td{background:#fff4c9!important;transition:background 1.6s}
+main{padding-top:20px}
+.card{background:var(--paper);border:1px solid var(--line);border-radius:var(--r);padding:18px;margin-bottom:16px}
+.card>h2{margin:0 0 4px;font-size:16px;letter-spacing:-.01em}
+.card>h2+.hint{margin-top:0}
+.hint{color:var(--mute);font-size:12.5px;margin:0 0 14px}
+.row{display:flex;gap:16px;flex-wrap:wrap}
+.col{flex:1;min-width:290px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{padding:6px 8px;border-bottom:1px solid var(--line2);text-align:left;vertical-align:middle}
+th{background:#f8f9fb;font-weight:600;color:var(--ink2);font-size:12px;border-bottom:1px solid var(--line);white-space:nowrap}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+td.c,th.c{text-align:center}
+tr.tot td{font-weight:700;background:#f8f9fb;border-top:1.5px solid var(--ink2);border-bottom:1.5px solid var(--ink2)}
+tr.sub td{font-weight:600;background:#fbfbfd}
+.in{color:var(--in)} .out{color:var(--out)}
+input,select,textarea,button{font-family:inherit;font-size:13px}
+input[type=text],input[type=number],input[type=date],select,textarea{
+  width:100%;padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:#fff;color:var(--ink)
+}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--accent-l);border-color:var(--accent)}
+input.n{text-align:right;font-variant-numeric:tabular-nums}
+.btn{background:var(--accent);color:#fff;border:0;border-radius:7px;padding:7px 14px;cursor:pointer;font-weight:600}
+.btn:hover{filter:brightness(1.1)}
+.btn.g{background:#fff;color:var(--ink2);border:1px solid var(--line)}
+.btn.g:hover{background:#f3f4f7;filter:none}
+.btn.sm{padding:3px 9px;font-size:12px;border-radius:6px}
+.btn.dg{background:#fff;color:var(--out);border:1px solid #f0d6d6}
+.tools{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+.tools .sp{margin-left:auto}
+.badge{display:inline-block;padding:1px 7px;border-radius:20px;font-size:11.5px;font-weight:600}
+.b-in{background:var(--in-bg);color:var(--in)} .b-out{background:var(--out-bg);color:var(--out)}
+.b-ok{background:var(--in-bg);color:var(--in)} .b-no{background:var(--out-bg);color:var(--out)}
+.b-w{background:var(--warn-bg);color:var(--warn)}
+.kv{display:flex;justify-content:space-between;gap:12px;padding:5px 0;border-bottom:1px dashed var(--line)}
+.kv b{font-variant-numeric:tabular-nums}
+.big{font-size:20px;font-weight:700;font-variant-numeric:tabular-nums}
+.note{background:var(--accent-l);border-left:3px solid var(--accent);padding:10px 13px;border-radius:0 8px 8px 0;font-size:12.5px;color:#26493f;margin-bottom:14px}
+.note.w{background:var(--warn-bg);border-color:var(--warn);color:#7a4f13}
+ol.steps{padding-left:18px;margin:0;font-size:13.2px}
+ol.steps li{margin-bottom:7px}
+ol.steps small{color:var(--mute);display:block}
+.form{display:grid;grid-template-columns:88px 1.4fr 132px 130px 1.4fr auto;gap:8px;align-items:end;background:#fafbfc;border:1px solid var(--line);padding:12px;border-radius:9px;margin-bottom:14px}
+.form label{font-size:11.5px;color:var(--mute);display:block;margin-bottom:3px;font-weight:600}
+@media(max-width:820px){ .form{grid-template-columns:1fr 1fr} }
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.chip{border:1px solid var(--line);background:#fff;border-radius:20px;padding:3px 12px;font-size:12px;cursor:pointer;color:var(--ink2)}
+.chip.on{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:600}
+.scroll{max-height:560px;overflow:auto;border:1px solid var(--line2);border-radius:8px}
+.scroll table{font-size:12.5px}
+.scroll thead th{position:sticky;top:0;z-index:1}
+.sign{display:flex;gap:26px;justify-content:flex-end;margin-top:26px;font-size:12.5px;color:var(--ink2)}
+.sign div{border-top:1px solid var(--ink2);padding-top:5px;min-width:110px;text-align:center}
+.print-only{display:none}
+.phead{text-align:center}
+.ph-c{font-size:12px;color:var(--mute)}
+.ph-t{font-size:19px;font-weight:700;margin:2px 0}
+.ph-s{font-size:12px;color:var(--mute)}
+
+@page{ size:A4 portrait; margin:12mm 10mm }
+@media print{
+  html,body{background:#fff;color:#000}
+  body{font-size:9.5pt;line-height:1.35}
+  header,nav,.tools,.form,.chips,.no-print,input[type=file]{display:none!important}
+  .print-only{display:block!important}
+  .wrap{max-width:none;width:100%;padding:0;margin:0}
+  main{padding-top:0}
+  .card{border:0;border-radius:0;padding:0;margin:0 0 7mm;background:none}
+  .row{display:block}
+  .col{width:100%!important;min-width:0!important;flex:none!important;margin:0 0 6mm}
+  .scroll{max-height:none;overflow:visible;border:0;border-radius:0}
+  table{width:100%;max-width:100%;font-size:9pt;border-collapse:collapse}
+  .scroll table{font-size:8.6pt}
+  th,td{padding:2px 4px;word-break:break-word;border-bottom:.4pt solid #bbb}
+  th{background:#eee!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;font-size:8.4pt}
+  thead{display:table-header-group}
+  tr{break-inside:avoid;page-break-inside:avoid}
+  tr.tot td,tr.sub td{background:#f0f0f0!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .card>h2{font-size:11pt;margin:0 0 3px;border-bottom:.6pt solid #666;padding-bottom:2px}
+  .hint{font-size:8pt;margin-bottom:4px}
+  input,select,textarea{border:0!important;padding:0 2px!important;background:transparent!important;
+    font-size:9pt;color:#000;box-shadow:none!important;-webkit-appearance:none;appearance:none}
+  textarea{resize:none;height:auto;min-height:16mm}
+  .badge{background:transparent!important;color:#000!important;padding:0;font-weight:600;border:0}
+  .big{font-size:12pt}
+  .note{background:#f4f4f4!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;
+    border-left:1.5pt solid #666;color:#000;font-size:8.2pt;padding:5px 8px}
+  .kv{padding:2px 0;font-size:9pt}
+  .phead{margin-bottom:5mm;break-after:avoid}
+  .ph-t{font-size:14pt} .ph-c,.ph-s{font-size:8.5pt;color:#444}
+  .sign{margin-top:8mm;break-inside:avoid;font-size:9pt;color:#000}
+  .sign div{border-top:.6pt solid #000}
+  ol.steps{font-size:8.6pt}
+}
+</style>
+
+<header>
+  <div class="wrap">
+    <div class="hd">
+      <h1 id="hTitle">부서 회계장부</h1>
+      <span class="sub" id="hSub"></span>
+      <span class="st" id="hSt"></span>
+    </div>
+    <nav id="nav"></nav>
+  </div>
+</header>
+<main class="wrap" id="view"></main>
+
+<script>
+const SEED = {"meta":{"year":2026,"dept":"유초등부","church":"신대중앙교회"},"openingBalance":4582893,"incomeItems":[{"name":"이월금","budget":360000},{"name":"교회보조","budget":16350000},{"name":"주일헌금","budget":3000000},{"name":"여름성경학교비","budget":2100000},{"name":"겨울성경학교비","budget":1750000},{"name":"졸업여행회비","budget":500000},{"name":"교재비","budget":600000},{"name":"후원금","budget":0},{"name":"예금이자","budget":0},{"name":"기타","budget":0}],"expenseItems":[{"name":"1.겨울성경학교","budget":6000000,"basis":""},{"name":"2.여름성경학교","budget":7000000,"basis":""},{"name":"3.교재및자료비","budget":1700000,"basis":""},{"name":"4.반모임","budget":3100000,"basis":""},{"name":"5.생일,예배간식","budget":3200000,"basis":""},{"name":"6.중보기도","budget":210000,"basis":""},{"name":"7.졸업,입학선물","budget":700000,"basis":""},{"name":"8.심방비","budget":400000,"basis":""},{"name":"9.비품구입","budget":400000,"basis":""},{"name":"10.예비비","budget":500000,"basis":""},{"name":"11.졸업여행","budget":700000,"basis":""},{"name":"12.기타","budget":0,"basis":""},{"name":"13.결산소득세","budget":0,"basis":""},{"name":"14.성경일독시상","budget":750000,"basis":""},{"name":"15.교사모임","budget":0,"basis":""}],"entries":{"DEC":[{"type":"수입","cat":"졸업여행회비","date":"2025-12-04","amount":50000,"note":"차희원"},{"type":"수입","cat":"졸업여행회비","date":"2025-12-04","amount":50000,"note":"김태완"},{"type":"지출","cat":"11.졸업여행","date":"2025-12-05","amount":66494,"note":"여행자보험"},{"type":"지출","cat":"11.졸업여행","date":"2025-12-05","amount":83800,"note":""},{"type":"지출","cat":"11.졸업여행","date":"2025-12-05","amount":156650,"note":""},{"type":"지출","cat":"11.졸업여행","date":"2025-12-05","amount":20800,"note":""},{"type":"지출","cat":"11.졸업여행","date":"2025-12-05","amount":347300,"note":""},{"type":"지출","cat":"11.졸업여행","date":"2025-12-06","amount":71200,"note":""},{"type":"지출","cat":"11.졸업여행","date":"2025-12-06","amount":4800,"note":""},{"type":"지출","cat":"11.졸업여행","date":"2025-12-06","amount":12000,"note":""},{"type":"지출","cat":"11.졸업여행","date":"2025-12-06","amount":2500,"note":""},{"type":"지출","cat":"11.졸업여행","date":"2025-12-06","amount":3000,"note":""},{"type":"수입","cat":"졸업여행회비","date":"2025-12-06","amount":50000,"note":"박정건"},{"type":"지출","cat":"9.비품구입","date":"2025-12-07","amount":5000,"note":""},{"type":"지출","cat":"5.생일,예배간식","date":"2025-12-07","amount":340000,"note":"12월생일간식"},{"type":"지출","cat":"1.겨울성경학교","date":"2025-12-07","amount":30000,"note":"컨퍼런스"},{"type":"지출","cat":"1.겨울성경학교","date":"2025-12-07","amount":54000,"note":"컨퍼런스 식사비"},{"type":"지출","cat":"4.반모임","date":"2025-12-07","amount":96000,"note":"4학년 남자"},{"type":"지출","cat":"4.반모임","date":"2025-12-07","amount":25500,"note":"4학년 남자"},{"type":"지출","cat":"4.반모임","date":"2025-12-07","amount":27000,"note":"4학년 남자"},{"type":"지출","cat":"4.반모임","date":"2025-12-07","amount":24000,"note":"4학년 남자"},{"type":"지출","cat":"5.생일,예배간식","date":"2025-12-13","amount":72000,"note":"성탄연습 간식"},{"type":"지출","cat":"9.비품구입","date":"2025-12-14","amount":69000,"note":"성탄준비물품"},{"type":"지출","cat":"15.교사모임","date":"2025-12-14","amount":280000,"note":""},{"type":"지출","cat":"4.반모임","date":"2025-12-15","amount":71000,"note":"3학년 남자"},{"type":"지출","cat":"4.반모임","date":"2025-12-15","amount":14900,"note":"3학년 남자"},{"type":"지출","cat":"9.비품구입","date":"2025-12-16","amount":56500,"note":"성탄준비물품"},{"type":"지출","cat":"5.생일,예배간식","date":"2025-12-16","amount":40500,"note":"성탄연습 간식"},{"type":"지출","cat":"9.비품구입","date":"2025-12-16","amount":57500,"note":"성탄준비물품"},{"type":"지출","cat":"5.생일,예배간식","date":"2025-12-19","amount":209300,"note":"성탄연습 간식"},{"type":"지출","cat":"9.비품구입","date":"2025-12-20","amount":22960,"note":"성탄준비물품"},{"type":"지출","cat":"5.생일,예배간식","date":"2025-12-20","amount":15580,"note":"성탄연습 간식"},{"type":"지출","cat":"3.교재및자료비","date":"2025-12-20","amount":67500,"note":"성경쓰기교재"},{"type":"지출","cat":"3.교재및자료비","date":"2025-12-20","amount":25920,"note":"교사용"},{"type":"지출","cat":"7.졸업,입학선물","date":"2025-12-20","amount":386100,"note":"졸업선물"},{"type":"수입","cat":"주일헌금","date":"2025-12-20","amount":57000,"note":"1207헌금"},{"type":"수입","cat":"주일헌금","date":"2025-12-20","amount":62000,"note":"1214헌금"},{"type":"수입","cat":"후원금","date":"2025-12-20","amount":100000,"note":"졸업여행 후원금"},{"type":"수입","cat":"졸업여행회비","date":"2025-12-20","amount":50000,"note":"이수하"},{"type":"수입","cat":"주일헌금","date":"2025-12-22","amount":67000,"note":"1221헌금"},{"type":"지출","cat":"9.비품구입","date":"2025-12-23","amount":11200,"note":"성탄준비물품"},{"type":"지출","cat":"5.생일,예배간식","date":"2025-12-25","amount":72160,"note":"성탄연습 간식"},{"type":"지출","cat":"5.생일,예배간식","date":"2025-12-25","amount":44400,"note":"성탄연습 간식"},{"type":"수입","cat":"예금이자","date":"2025-12-28","amount":532,"note":""},{"type":"지출","cat":"13.결산소득세","date":"2025-12-28","amount":70,"note":""},{"type":"지출","cat":"7.졸업,입학선물","date":"2025-12-28","amount":50000,"note":"졸업증서"}],"Q1":[{"type":"지출","cat":"1.겨울성경학교","date":"2026-01-05","amount":52600,"note":"비품"},{"type":"지출","cat":"1.겨울성경학교","date":"2026-01-05","amount":74300,"note":"식사비"},{"type":"지출","cat":"1.겨울성경학교","date":"2026-01-05","amount":55600,"note":"식사비"},{"type":"수입","cat":"겨울성경학교비","date":"2026-01-05","amount":35000,"note":"노원준"},{"type":"수입","cat":"교재비","date":"2026-01-05","amount":8000,"note":"노원준"},{"type":"수입","cat":"겨울성경학교비","date":"2026-01-05","amount":35000,"note":"한유하"},{"type":"수입","cat":"교재비","date":"2026-01-05","amount":8000,"note":"한유하"},{"type":"수입","cat":"겨울성경학교비","date":"2026-01-05","amount":35000,"note":"이은찬"},{"type":"수입","cat":"교재비","date":"2026-01-05","amount":8000,"note":"이은찬"},{"type":"수입","cat":"겨울성경학교비","date":"2026-01-05","amount":35000,"note":"조온유"},{"type":"수입","cat":"겨울성경학교비","date":"2026-01-05","amount":35000,"note":"조유이"},{"type":"수입","cat":"교재비","date":"2026-01-05","amount":16000,"note":"조온유, 조유이"},{"type":"수입","cat":"겨울성경학교비","date":"2026-01-05","amount":35000,"note":"전은채"},{"type":"수입","cat":"교재비","date":"2026-01-05","amount":8000,"note":"전은채"},{"type":"수입","cat":"주일헌금","date":"2026-01-06","amount":10000,"note":"25.1225헌금"},{"type":"수입","cat":"주일헌금","date":"2026-01-06","amount":63000,"note":"25.1228헌금"},{"type":"수입","cat":"주일헌금","date":"2026-01-06","amount":55000,"note":"0104헌금"},{"type":"수입","cat":"교재비","date":"2026-01-06","amount":8000,"note":"공지안"},{"type":"수입","cat":"교재비","date":"2026-01-06","amount":8000,"note":"공지혁"},{"type":"지출","cat":"5.생일,예배간식","date":"2026-01-06","amount":388500,"note":"1월간식"},{"type":"지출","cat":"1.겨울성경학교","date":"2026-01-06","amount":46900,"note":"비품"},{"type":"수입","cat":"교재비","date":"2026-01-06","amount":8000,"note":"박윤"},{"type":"수입","cat":"겨울성경학교비","date":"2026-01-06","amount":35000,"note":"박윤"},{"type":"수입","cat":"교재비","date":"2026-01-07","amount":8000,"note":"김서현"},{"type":"수입","cat":"겨울성경학교비","date":"2026-01-07","amount":35000,"note":"한소이"},{"type":"수입","cat":"교재비","date":"2026-01-07","amount":8000,"note":"한소이"},{"type":"수입","cat":"겨울성경학교비","date":"2026-01-08","amount":35000,"note":"강병욱"},{"type":"수입","cat":"겨울성경학교비","date":"2026-01-08","amount":35000,"note":"최서우"},{"type":"수입","cat":"교재비","date":"2026-01-08","amount":8000,"note":"최서우"},{"type":"수입","cat":"겨울성경학교비","date":"2026-01-08","amount":35000,"note":"박은유"},{"type":"수입","cat":"겨울성경학교비","date":"2026-01-08","amount":35000,"note":"박은찬"},{"type":"수입","cat":"교재비","date":"2026-01-08","amount":8000,"note":"박은유"},{"type":"수입","cat":"교재비","date":"2026-01-08","amount":8000,"note":"박은찬"},{"type":"수입","cat":"겨울성경학교비","date":"2026-01-09","amount":35000,"note":"이하루"},{"type":"수입","cat":"겨울성경학교비","date":"2026-01-09","amount":35000,"note":"이하온"},{"type":"수입","cat":"교재비","date":"2026-01-09","amount":8000,"note":"이하루"},{"type":"수입","cat":"교재비","date":"2026-01-09","amount":8000,"note":"이하온"},{"type":"수입","cat":"겨울성경학교비","date":"2026-01-09","amount":35000,"note":"양주희"},{"type":"수입","cat":"교재비","date":"2026-01-09","amount":8000,"note":"양주희"},{"type":"수입","cat":"겨울성경학교비","date":"2026-01-09","amount":70000,"note":"김가율,김가은"},{"type":"수입","cat":"교재비","date":"2026-01-09","amount":16000,"note":"김가율,김가은"},{"type":"수입","cat":"겨울성경학교비","date":"2026-01-09","amount":35000,"note":"임가은"},{"type":"수입","cat":"교재비","date":"2026-01-09","amount":8000,"note":"임가은"},{"type":"수입","cat":"겨울성경학교비","date":"2026-01-10","amount":35000,"note":"이든"},{"type":"수입","cat":"교재비","date":"2026-01-10","amount":8000,"note":"이든"},{"type":"수입","cat":"겨울성경학교비","date":"2026-01-10","amount":35000,"note":"강세연"},{"type":"수입","cat":"교재비","date":"2026-01-10","amount":8000,"note":"강세연"},{"type":"수입","cat":"교재비","date":"2026-01-10","amount":8000,"note":"유온유"},{"type":"수입","cat":"겨울성경학교비","date":"2026-01-10","amount":35000,"note":"유"},{"type":"수입","cat":"겨울성경학교비","date":"2026-01-10","amount":70000,"note":"최은송, 최은준"},{"type":"수입","cat":"겨울성경학교비","date":"2026-01-10","amount":35000,"note":"김희운"},{"type":"수입","cat":"교재비","date":"2026-01-10","amount":8000,"note":"김희운"},{"type":"수입","cat":"겨울성경학교비","date":"2026-01-10","amount":35000,"note":"이하람"},{"type":"수입","cat":"겨울성경학교비","date":"2026-01-10","amount":35000,"note":"이다온"},{"type":"수입","cat":"겨울성경학교비","date":"2026-01-10","amount":35000,"note":"소수호"},{"type":"수입","cat":"교재비","date":"2026-01-10","amount":8000,"note":"소수호"},{"type":"수입","cat":"겨울성경학교비","date":"2026-01-10","amount":35000,"note":"홍연우"},{"type":"수입","cat":"교재비","date":"2026-01-10","amount":8000,"note":"홍연우"},{"type":"수입","cat":"교재비","date":"2026-01-10","amount":8000,"note":"김리원"},{"type":"수입","cat":"겨울성경학교비","date":"2026-01-10","amount":35000,"note":"고로윤"},{"type":"수입","cat":"교재비","date":"2026-01-10","amount":8000,"note":"고로윤"},{"type":"수입","cat":"겨울성경학교비","date":"2026-01-11","amount":35000,"note":"정라온"},{"type":"수입","cat":"겨울성경학교비","date":"2026-01-11","amount":35000,"note":"정하온"},{"type":"수입","cat":"교재비","date":"2026-01-11","amount":8000,"note":"정라온"},{"type":"수입","cat":"교재비","date":"2026-01-11","amount":8000,"note":"정하온"},{"type":"지출","cat":"1.겨울성경학교","date":"2026-01-11","amount":131490,"note":"비품"},{"type":"지출","cat":"1.겨울성경학교","date":"2026-01-11","amount":385750,"note":"간식"},{"type":"지출","cat":"1.겨울성경학교","date":"2026-01-11","amount":39000,"note":"간식"},{"type":"수입","cat":"겨울성경학교비","date":"2026-01-11","amount":70000,"note":"나다온, 나하온"},{"type":"지출","cat":"1.겨울성경학교","date":"2026-01-11","amount":16000,"note":"비품"},{"type":"수입","cat":"겨울성경학교비","date":"2026-01-11","amount":35000,"note":"김완"},{"type":"지출","cat":"1.겨울성경학교","date":"2026-01-11","amount":132000,"note":"식사비"},{"type":"수입","cat":"겨울성경학교비","date":"2026-01-11","amount":35000,"note":"박승유"},{"type":"수입","cat":"교회보조","date":"2026-01-11","amount":3000000,"note":""},{"type":"수입","cat":"겨울성경학교비","date":"2026-01-11","amount":70000,"note":"김연후, 김지안"},{"type":"수입","cat":"겨울성경학교비","date":"2026-01-12","amount":35000,"note":"송지후"},{"type":"지출","cat":"1.겨울성경학교","date":"2026-01-12","amount":364800,"note":"간식피자"},{"type":"지출","cat":"1.겨울성경학교","date":"2026-01-12","amount":38990,"note":"간식빵"},{"type":"지출","cat":"1.겨울성경학교","date":"2026-01-12","amount":652000,"note":"간식치킨"},{"type":"지출","cat":"1.겨울성경학교","date":"2026-01-12","amount":175000,"note":"김밥"},{"type":"수입","cat":"후원금","date":"2026-01-12","amount":100000,"note":"김성원,한은영집사님"},{"type":"수입","cat":"겨울성경학교비","date":"2026-01-12","amount":35000,"note":"전유빈"},{"type":"수입","cat":"교재비","date":"2026-01-12","amount":8000,"note":"전유빈"},{"type":"수입","cat":"겨울성경학교비","date":"2026-01-13","amount":35000,"note":"이정진"},{"type":"지출","cat":"7.졸업,입학선물","date":"2026-01-13","amount":122400,"note":"신입생선물"},{"type":"지출","cat":"1.겨울성경학교","date":"2026-01-13","amount":20000,"note":"자료"},{"type":"지출","cat":"1.겨울성경학교","date":"2026-01-13","amount":43140,"note":"비품"},{"type":"수입","cat":"겨울성경학교비","date":"2026-01-13","amount":35000,"note":"주세율"},{"type":"수입","cat":"교재비","date":"2026-01-13","amount":8000,"note":"주세율"},{"type":"수입","cat":"겨울성경학교비","date":"2026-01-14","amount":35000,"note":"김아현"},{"type":"수입","cat":"겨울성경학교비","date":"2026-01-14","amount":35000,"note":"이세하"},{"type":"수입","cat":"교재비","date":"2026-01-14","amount":8000,"note":"이세하"},{"type":"지출","cat":"겨울성경학교비","date":"2026-01-14","amount":35000,"note":"송지후"},{"type":"지출","cat":"1.겨울성경학교","date":"2026-01-15","amount":32000,"note":"떡"},{"type":"수입","cat":"겨울성경학교비","date":"2026-01-15","amount":35000,"note":"백지민"},{"type":"수입","cat":"교재비","date":"2026-01-15","amount":8000,"note":"백지민"},{"type":"수입","cat":"주일헌금","date":"2026-01-15","amount":63000,"note":"0111헌금"},{"type":"수입","cat":"후원금","date":"2026-01-15","amount":100000,"note":"박종성, 김현정집사"},{"type":"지출","cat":"1.겨울성경학교","date":"2026-01-15","amount":156170,"note":"여행자보험"},{"type":"수입","cat":"겨울성경학교비","date":"2026-01-15","amount":70000,"note":"박서진, 박서하"},{"type":"수입","cat":"겨울성경학교비","date":"2026-01-15","amount":20000,"note":"장서우"},{"type":"지출","cat":"1.겨울성경학교","date":"2026-01-15","amount":14000,"note":"음료"},{"type":"지출","cat":"1.겨울성경학교","date":"2026-01-15","amount":34900,"note":"우유"},{"type":"지출","cat":"1.겨울성경학교","date":"2026-01-15","amount":112000,"note":"식사비"},{"type":"수입","cat":"후원금","date":"2026-01-16","amount":100000,"note":"정봉채,이선자집사"},{"type":"지출","cat":"1.겨울성경학교","date":"2026-01-16","amount":158660,"note":"식사비"},{"type":"지출","cat":"1.겨울성경학교","date":"2026-01-16","amount":22000,"note":"비품"},{"type":"지출","cat":"1.겨울성경학교","date":"2026-01-16","amount":82000,"note":"치킨"},{"type":"지출","cat":"1.겨울성경학교","date":"2026-01-16","amount":2649,"note":"여행자보험"},{"type":"지출","cat":"1.겨울성경학교","date":"2026-01-16","amount":18000,"note":"음료"},{"type":"지출","cat":"1.겨울성경학교","date":"2026-01-17","amount":855000,"note":"썰매장"},{"type":"지출","cat":"1.겨울성경학교","date":"2026-01-17","amount":57000,"note":"썰매장"},{"type":"수입","cat":"후원금","date":"2026-01-17","amount":39000,"note":"이경주집사"},{"type":"지출","cat":"1.겨울성경학교","date":"2026-01-18","amount":1200000,"note":"비전센터 이용료"},{"type":"지출","cat":"1.겨울성경학교","date":"2026-01-18","amount":200000,"note":"비전센터 청소비]"},{"type":"수입","cat":"겨울성경학교비","date":"2026-01-18","amount":35000,"note":"박제하"},{"type":"지출","cat":"1.겨울성경학교","date":"2026-01-18","amount":230000,"note":"시상"},{"type":"지출","cat":"1.겨울성경학교","date":"2026-01-18","amount":73000,"note":"시상"},{"type":"수입","cat":"겨울성경학교비","date":"2026-01-18","amount":35000,"note":"이미소"},{"type":"지출","cat":"1.겨울성경학교","date":"2026-01-18","amount":229000,"note":"식사비"},{"type":"지출","cat":"1.겨울성경학교","date":"2026-01-18","amount":22700,"note":"식사비"},{"type":"수입","cat":"교재비","date":"2026-01-22","amount":16000,"note":"최은송, 최은준"},{"type":"지출","cat":"3.교재및자료비","date":"2026-01-23","amount":694800,"note":"공과교재"},{"type":"지출","cat":"3.교재및자료비","date":"2026-01-23","amount":87000,"note":"공과교재 교사용"},{"type":"수입","cat":"교재비","date":"2026-01-24","amount":16000,"note":"나다온, 나하온"},{"type":"수입","cat":"교재비","date":"2026-01-25","amount":8000,"note":"황은율"},{"type":"수입","cat":"교회보조","date":"2026-01-25","amount":1000000,"note":""},{"type":"수입","cat":"교재비","date":"2026-02-01","amount":16000,"note":"노엘린, 노제이"},{"type":"수입","cat":"교재비","date":"2026-02-01","amount":8000,"note":"이정진"},{"type":"지출","cat":"1.겨울성경학교","date":"2026-02-04","amount":88740,"note":"간식"},{"type":"지출","cat":"1.겨울성경학교","date":"2026-02-05","amount":100000,"note":"스피커"},{"type":"지출","cat":"5.생일,예배간식","date":"2026-02-08","amount":412500,"note":"2월생일간식"},{"type":"지출","cat":"5.생일,예배간식","date":"2026-02-18","amount":110840,"note":"mit간식"},{"type":"수입","cat":"주일헌금","date":"2026-02-18","amount":70000,"note":"0125헌금"},{"type":"수입","cat":"주일헌금","date":"2026-02-18","amount":50000,"note":"0201헌금"},{"type":"수입","cat":"주일헌금","date":"2026-02-18","amount":76000,"note":"0208헌금"},{"type":"수입","cat":"주일헌금","date":"2026-02-18","amount":45000,"note":"0215헌금"}],"Q2":[],"Q3":[],"Q4":[]},"nextYear":{"expense":{},"income":{},"basis":{},"note":""}};
+/* QR 코드 생성기 — byte 모드, 오류정정 레벨 M, 버전 1~20 */
+var QR = (function(){
+  // 버전: [블록당 오류정정 코드워드, [[블록수, 데이터코드워드], ...]]
+  var EC = {
+    1:[10,[[1,16]]],            2:[16,[[1,28]]],            3:[26,[[1,44]]],
+    4:[18,[[2,32]]],            5:[24,[[2,43]]],            6:[16,[[4,27]]],
+    7:[18,[[4,31]]],            8:[22,[[2,38],[2,39]]],     9:[22,[[3,36],[2,37]]],
+    10:[26,[[4,43],[1,44]]],    11:[30,[[1,50],[4,51]]],    12:[22,[[6,36],[2,37]]],
+    13:[22,[[8,37],[1,38]]],    14:[24,[[4,40],[5,41]]],    15:[24,[[5,41],[5,42]]],
+    16:[28,[[7,45],[3,46]]],    17:[28,[[10,46],[1,47]]],   18:[26,[[9,43],[4,44]]],
+    19:[26,[[3,44],[11,45]]],   20:[26,[[3,41],[13,42]]]
+  };
+  var ALIGN = {
+    2:[6,18],3:[6,22],4:[6,26],5:[6,30],6:[6,34],7:[6,22,38],8:[6,24,42],9:[6,26,46],
+    10:[6,28,50],11:[6,30,54],12:[6,32,58],13:[6,34,62],14:[6,26,46,66],15:[6,26,48,70],
+    16:[6,26,50,74],17:[6,30,54,78],18:[6,30,56,82],19:[6,30,58,86],20:[6,34,62,90]
+  };
+  var REM = {1:0,2:7,3:7,4:7,5:7,6:7,7:0,8:0,9:0,10:0,11:0,12:0,13:0,
+             14:3,15:3,16:3,17:3,18:3,19:3,20:3};
+
+  var EXP=new Array(512), LOG=new Array(256);
+  (function(){ var x=1;
+    for(var i=0;i<255;i++){ EXP[i]=x; LOG[x]=i; x<<=1; if(x&0x100) x^=0x11D; }
+    for(var j=255;j<512;j++) EXP[j]=EXP[j-255];
+  })();
+  function gmul(a,b){ return (a===0||b===0)?0:EXP[LOG[a]+LOG[b]]; }
+  function polyMul(a,b){
+    var r=new Array(a.length+b.length-1).fill(0);
+    for(var i=0;i<a.length;i++) for(var j=0;j<b.length;j++) r[i+j]^=gmul(a[i],b[j]);
+    return r;
+  }
+  function rsGen(n){ var p=[1]; for(var i=0;i<n;i++) p=polyMul(p,[1,EXP[i]]); return p; }
+  function rsEnc(data,n){
+    var gen=rsGen(n), res=data.slice().concat(new Array(n).fill(0));
+    for(var i=0;i<data.length;i++){
+      var c=res[i]; if(!c) continue;
+      for(var j=0;j<gen.length;j++) res[i+j]^=gmul(gen[j],c);
+    }
+    return res.slice(data.length);
+  }
+  function utf8(s){
+    var out=[];
+    for(var i=0;i<s.length;i++){
+      var c=s.charCodeAt(i);
+      if(c<0x80) out.push(c);
+      else if(c<0x800){ out.push(0xC0|c>>6, 0x80|c&63); }
+      else if(c>=0xD800&&c<0xDC00&&i+1<s.length){
+        var c2=s.charCodeAt(++i), cp=0x10000+((c-0xD800)<<10)+(c2-0xDC00);
+        out.push(0xF0|cp>>18, 0x80|cp>>12&63, 0x80|cp>>6&63, 0x80|cp&63);
+      }
+      else { out.push(0xE0|c>>12, 0x80|c>>6&63, 0x80|c&63); }
+    }
+    return out;
+  }
+  function totalData(v){ var t=0, g=EC[v][1]; for(var i=0;i<g.length;i++) t+=g[i][0]*g[i][1]; return t; }
+  function pickVersion(len){
+    for(var v=1;v<=20;v++){
+      var cc = v<10?1:2;               // 문자 수 지시자 바이트
+      if(totalData(v) >= len + 2 + cc) return v;   // 모드 4비트 + 문자수 + 데이터
+    }
+    return null;
+  }
+  function size(v){ return 17+4*v; }
+
+  function fmtBits(mask){                 // 레벨 M = 00
+    var v = (0<<3)|mask;
+    var d = v<<10;
+    for(var i=14;i>=10;i--) if(d>>i&1) d ^= 0x537<<(i-10);
+    return ((v<<10)|d) ^ 0x5412;
+  }
+  function verBits(v){
+    var d = v<<12;
+    for(var i=17;i>=12;i--) if(d>>i&1) d ^= 0x1F25<<(i-12);
+    return (v<<12)|d;
+  }
+
+  function build(text){
+    var bytes = utf8(text), v = pickVersion(bytes.length);
+    if(!v) throw new Error('주소가 너무 깁니다');
+    var n = size(v), ccBits = v<10?8:16;
+
+    // 비트스트림
+    var bits=[];
+    function push(val,len){ for(var i=len-1;i>=0;i--) bits.push(val>>i&1); }
+    push(4,4); push(bytes.length,ccBits);
+    for(var i=0;i<bytes.length;i++) push(bytes[i],8);
+    var cap = totalData(v)*8;
+    for(var t=0;t<4 && bits.length<cap;t++) bits.push(0);
+    while(bits.length%8) bits.push(0);
+    var pads=[0xEC,0x11], pi=0;
+    while(bits.length<cap){ push(pads[pi++%2],8); }
+
+    var dcw=[]; for(var b=0;b<bits.length;b+=8){
+      var x=0; for(var k=0;k<8;k++) x=(x<<1)|bits[b+k]; dcw.push(x);
+    }
+
+    // 블록 분할 + 오류정정
+    var ecn=EC[v][0], groups=EC[v][1], blocks=[], ecbs=[], p=0;
+    groups.forEach(function(g){
+      for(var i=0;i<g[0];i++){
+        var d=dcw.slice(p,p+g[1]); p+=g[1];
+        blocks.push(d); ecbs.push(rsEnc(d,ecn));
+      }
+    });
+    var maxD=Math.max.apply(null,blocks.map(function(b){return b.length}));
+    var final=[];
+    for(var c=0;c<maxD;c++) for(var bi=0;bi<blocks.length;bi++) if(c<blocks[bi].length) final.push(blocks[bi][c]);
+    for(var c2=0;c2<ecn;c2++) for(var bj=0;bj<ecbs.length;bj++) final.push(ecbs[bj][c2]);
+
+    var stream=[];
+    final.forEach(function(x){ for(var i=7;i>=0;i--) stream.push(x>>i&1); });
+    for(var r=0;r<REM[v];r++) stream.push(0);
+
+    // 매트릭스
+    var m=[], res=[];
+    for(var y=0;y<n;y++){ m.push(new Array(n).fill(null)); res.push(new Array(n).fill(false)); }
+    function set(x,y,val){ m[y][x]=val?1:0; res[y][x]=true; }
+    function finder(cx,cy){
+      for(var dy=-1;dy<=7;dy++) for(var dx=-1;dx<=7;dx++){
+        var x=cx+dx, y=cy+dy; if(x<0||y<0||x>=n||y>=n) continue;
+        var on = (dx>=0&&dx<=6&&(dy===0||dy===6)) || (dy>=0&&dy<=6&&(dx===0||dx===6)) ||
+                 (dx>=2&&dx<=4&&dy>=2&&dy<=4);
+        set(x,y,on);
+      }
+    }
+    finder(0,0); finder(n-7,0); finder(0,n-7);
+    for(var i2=8;i2<n-8;i2++){ set(i2,6,i2%2===0); set(6,i2,i2%2===0); }
+    var ap=ALIGN[v]||[];
+    for(var a=0;a<ap.length;a++) for(var b2=0;b2<ap.length;b2++){
+      var cx=ap[b2], cy=ap[a];
+      if((cx<=8&&cy<=8)||(cx>=n-9&&cy<=8)||(cx<=8&&cy>=n-9)) continue;
+      for(var dy2=-2;dy2<=2;dy2++) for(var dx2=-2;dx2<=2;dx2++)
+        set(cx+dx2,cy+dy2, Math.max(Math.abs(dx2),Math.abs(dy2))!==1);
+    }
+    set(8,n-8,true);                                  // 항상 검은 모듈
+    function fmtCells(){                              // 비트 i(LSB부터)가 놓이는 [x,y]
+      var c1=[], c2=[], i;
+      for(i=0;i<=5;i++) c1.push([8,i]);
+      c1.push([8,7],[8,8],[7,8]);
+      for(i=9;i<15;i++) c1.push([14-i,8]);
+      for(i=0;i<8;i++)  c2.push([n-1-i,8]);
+      for(i=8;i<15;i++) c2.push([8,n-15+i]);
+      return [c1,c2];
+    }
+    var fc=fmtCells();
+    fc[0].forEach(function(c){ res[c[1]][c[0]]=true; });
+    fc[1].forEach(function(c){ res[c[1]][c[0]]=true; });
+    if(v>=7){
+      var vb=verBits(v);
+      for(var i3=0;i3<18;i3++){
+        var bit=vb>>i3&1, r1=Math.floor(i3/3), c1=i3%3;
+        set(r1, n-11+c1, bit); set(n-11+c1, r1, bit);
+      }
+    }
+
+    // 데이터 배치
+    var idx=0, up=true;
+    for(var col=n-1;col>0;col-=2){
+      if(col===6) col--;
+      for(var t2=0;t2<n;t2++){
+        var row = up ? n-1-t2 : t2;
+        for(var s=0;s<2;s++){
+          var cc2 = col-s;
+          if(res[row][cc2]) continue;
+          m[row][cc2] = idx<stream.length ? stream[idx++] : 0;
+        }
+      }
+      up=!up;
+    }
+
+    function maskFn(k,x,y){
+      switch(k){
+        case 0: return (y+x)%2===0;
+        case 1: return y%2===0;
+        case 2: return x%3===0;
+        case 3: return (y+x)%3===0;
+        case 4: return (Math.floor(y/2)+Math.floor(x/3))%2===0;
+        case 5: return (y*x)%2+(y*x)%3===0;
+        case 6: return ((y*x)%2+(y*x)%3)%2===0;
+        case 7: return ((y+x)%2+(y*x)%3)%2===0;
+      }
+    }
+    function penalty(g){
+      var p1=0,p2=0,p3=0,dark=0;
+      function runScore(line){
+        var s=0,run=1;
+        for(var i=1;i<line.length;i++){
+          if(line[i]===line[i-1]) run++;
+          else { if(run>=5) s+=run-2; run=1; }
+        }
+        if(run>=5) s+=run-2;
+        return s;
+      }
+      for(var y=0;y<n;y++) p1+=runScore(g[y]);
+      for(var x=0;x<n;x++){ var colArr=[]; for(var y2=0;y2<n;y2++) colArr.push(g[y2][x]); p1+=runScore(colArr); }
+      for(var y3=0;y3<n-1;y3++) for(var x3=0;x3<n-1;x3++){
+        var a2=g[y3][x3];
+        if(a2===g[y3][x3+1]&&a2===g[y3+1][x3]&&a2===g[y3+1][x3+1]) p2+=3;
+      }
+      var pat1=[1,0,1,1,1,0,1,0,0,0,0], pat2=[0,0,0,0,1,0,1,1,1,0,1];
+      function findPat(line){
+        var c=0;
+        for(var i=0;i+11<=line.length;i++){
+          var ok1=true, ok2=true;
+          for(var j=0;j<11;j++){ if(line[i+j]!==pat1[j]) ok1=false; if(line[i+j]!==pat2[j]) ok2=false; }
+          if(ok1) c++; if(ok2) c++;
+        }
+        return c*40;
+      }
+      for(var y4=0;y4<n;y4++) p3+=findPat(g[y4]);
+      for(var x4=0;x4<n;x4++){ var cA=[]; for(var y5=0;y5<n;y5++) cA.push(g[y5][x4]); p3+=findPat(cA); }
+      for(var y6=0;y6<n;y6++) for(var x6=0;x6<n;x6++) if(g[y6][x6]) dark++;
+      var pct=dark*100/(n*n);
+      var p4=Math.floor(Math.abs(pct-50)/5)*10;
+      return p1+p2+p3+p4;
+    }
+
+    var best=null, bestK=0, bestP=Infinity;
+    for(var k2=0;k2<8;k2++){
+      var g2=[];
+      for(var y7=0;y7<n;y7++){
+        g2.push([]);
+        for(var x7=0;x7<n;x7++)
+          g2[y7].push(res[y7][x7] ? m[y7][x7] : (m[y7][x7] ^ (maskFn(k2,x7,y7)?1:0)));
+      }
+      var fb=fmtBits(k2);
+      fc[0].forEach(function(c,i){ g2[c[1]][c[0]] = fb>>i&1; });
+      fc[1].forEach(function(c,i){ g2[c[1]][c[0]] = fb>>i&1; });
+      g2[n-8][8]=1;
+      var pen=penalty(g2);
+      if(pen<bestP){ bestP=pen; best=g2; bestK=k2; }
+    }
+    return best;
+  }
+  return {build:build};
+})();
+
+
+/* ───────── 상태 ───────── */
+const KEY = 'church_ledger_v1';
+const P = [
+  {k:'DEC',label:'전년 12월', d:y=>`${y-1}년 12월 · 별도 정산`, m:[12], prev:true},
+  {k:'Q1', label:'1분기', d:y=>`${y}년 1~3월`,   m:[1,2,3]},
+  {k:'Q2', label:'2분기', d:y=>`${y}년 4~6월`,   m:[4,5,6]},
+  {k:'Q3', label:'3분기', d:y=>`${y}년 7~9월`,   m:[7,8,9]},
+  {k:'Q4', label:'4분기', d:y=>`${y}년 10~12월`, m:[10,11,12]},
+];
+const PERIOD = y => `${y}.1.1 ~ ${y}.12.31`;
+function pHead(title,sub){
+  return `<div class="print-only phead"><div class="ph-c">${esc(S.meta.church||'')}</div>
+    <div class="ph-t">${esc(title)}</div><div class="ph-s">${esc(sub||'')}</div></div>`;
+}
+function pBar(extra){
+  return `<div class="tools no-print">${extra||''}<span class="sp"></span>${srvBtns()}
+    <button class="btn g sm" onclick="window.print()">인쇄 (A4)</button></div>`;
+}
+function srvBtns(){
+  return `<button class="btn g sm no-ro" data-srv="save">파일 저장</button>
+    <button class="btn g sm no-ro" data-srv="load">파일 열기</button>`;
+}
+const QK = ['Q1','Q2','Q3','Q4'];
+let S, tab='guide', per='Q1', mfil=0, sortDate=true, editId=null, dirty=false;
+let ro=false, roName='', mine=null, deptList=[], lastAdd=null, srvMsg='';
+
+function uid(){ return Math.random().toString(36).slice(2,9) }
+function fresh(){
+  return {meta:{year:new Date().getFullYear(),dept:'',church:'',url:''},openingBalance:0,
+    incomeItems:[{name:'이월금',budget:0}],expenseItems:[],
+    entries:{DEC:[],Q1:[],Q2:[],Q3:[],Q4:[]},
+    nextYear:{expense:{},income:{},basis:{},extraExp:[],extraInc:[],dec:0,note:''}};
+}
+function norm(s){
+  s = Object.assign(fresh(), s||{});
+  s.meta = Object.assign({year:2026,dept:'',church:'',url:''}, s.meta);
+  s.nextYear = Object.assign({expense:{},income:{},basis:{},extraExp:[],extraInc:[],dec:0,note:''}, s.nextYear);
+  s.nextYear.extraExp = (s.nextYear.extraExp||[]).map(x=>({name:x.name||'',amt:+x.amt||0,basis:x.basis||''}));
+  s.nextYear.extraInc = (s.nextYear.extraInc||[]).map(x=>({name:x.name||'',amt:+x.amt||0}));
+  P.forEach(p=>{ s.entries[p.k] = (s.entries[p.k]||[]).map(e=>Object.assign({id:uid(),note:'',date:''},e)) });
+  s.incomeItems = (s.incomeItems||[]).map(i=>({name:i.name,budget:+i.budget||0}));
+  s.expenseItems = (s.expenseItems||[]).map(i=>({name:i.name,budget:+i.budget||0,basis:i.basis||''}));
+  return s;
+}
+
+/* ───────── 저장 ───────── */
+const store = {
+  async get(k){
+    if (window.storage) { try{ const r = await window.storage.get(k); return r? r.value : null }catch(e){ return null } }
+    try { return window.localStorage.getItem(k) } catch(e){ return null }
+  },
+  async set(k,v){
+    if (window.storage) { try{ await window.storage.set(k,v) }catch(e){} return }
+    try { window.localStorage.setItem(k,v) } catch(e){}
+  }
+};
+let saveT=null;
+function save(){
+  if(ro) return;                       // 열람 모드에서는 저장하지 않는다
+  dirty=true; setStatus('저장 중…');
+  clearTimeout(saveT);
+  saveT = setTimeout(async()=>{
+    try{ await store.set(KEY, JSON.stringify(S)); dirty=false; setStatus('임시 보관됨 · '+nowT()) }
+    catch(e){ setStatus('⚠ 임시 보관 실패 — [파일 저장]을 눌러 주세요') }
+  }, 350);
+}
+function nowT(){ return new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'}) }
+function setStatus(t){ const el=document.getElementById('hSt'); if(el) el.textContent=t }
+window.addEventListener('beforeunload', e=>{ if(dirty){ e.preventDefault(); e.returnValue='' } });
+
+/* ───────── 서버(공유) 저장 ───────── */
+const APPVER = '2026.2';
+const LIBKEY = 'church_ledger_lib_v1';
+let LIB = {};                                       // 다른 부서 파일 보관소
+const SRV = !!window.storage;                       // Claude 앱 안에서만 서버 저장 가능
+
+/* ── 파일 저장 / 열기 ── */
+function deptName(){ return (S.meta.dept||'').trim() }
+function fileName(ext){ return `${deptName()||'부서'}_${String(S.meta.year).slice(2)}회계.${ext}` }
+function payload(){
+  return {app:'church-ledger', ver:APPVER, name:deptName(), year:S.meta.year, at:Date.now(), data:S};
+}
+function saveFile(){
+  if(ro){ alert('열람 중인 다른 부서 자료는 저장할 수 없습니다.'); return }
+  if(!deptName()){ alert('안내 탭 기본 정보에 작성 부서명을 먼저 입력하세요.'); return }
+  dl(new Blob([JSON.stringify(payload(),null,1)],{type:'application/json'}), fileName('json'));
+  srvMsg = `${fileName('json')} 파일로 저장했습니다. 공유 폴더에 넣어 두세요.`;
+  render();
+}
+function parseFile(text){                            // 옛 형식(원본 그대로)도 받아들인다
+  const o = JSON.parse(text);
+  if(o && o.data && o.data.meta) return {name:o.name||o.data.meta.dept||'부서', year:o.year||o.data.meta.year, at:o.at||0, data:o.data};
+  if(o && o.meta) return {name:o.meta.dept||'부서', year:o.meta.year, at:0, data:o};
+  throw new Error('형식이 다릅니다');
+}
+function libKey(r){ return `${r.name}_${r.year}` }
+async function saveLib(){ try{ await store.set(LIBKEY, JSON.stringify(LIB)) }catch(e){} }
+function addToLib(text){
+  const r = parseFile(text), k = libKey(r);
+  if(!LIB[k] || (r.at||0) >= (LIB[k].at||0)) LIB[k] = r;   // 같은 부서면 최신 것만 남긴다
+  return r;
+}
+function openMyFile(file){
+  const rd=new FileReader();
+  rd.onload=()=>{ try{
+      const r=parseFile(rd.result);
+      if(!confirm(`${r.name} ${r.year}년 자료를 불러옵니다.\n지금 화면의 내용은 사라집니다. 계속할까요?`)) return;
+      S=norm(r.data); ro=false; mine=null; editId=null; save();
+      srvMsg='파일을 불러왔습니다.'; tab='guide'; render();
+    }catch(e){ alert('회계장부 파일이 아닙니다.') } };
+  rd.readAsText(file);
+}
+function openDeptFiles(files){
+  let ok=0, fail=0, left=files.length;
+  if(!left) return;
+  Array.prototype.forEach.call(files, f=>{
+    const rd=new FileReader();
+    rd.onload=()=>{ try{ addToLib(rd.result); ok++ }catch(e){ fail++ } done() };
+    rd.onerror=()=>{ fail++; done() };
+    rd.readAsText(f);
+  });
+  function done(){
+    if(--left) return;
+    saveLib();
+    srvMsg = `부서 파일 ${ok}개를 읽었습니다.` + (fail?` (${fail}개는 형식이 달라 건너뜀)`:'');
+    render();
+  }
+}
+async function readFolder(){
+  if(!window.showDirectoryPicker){ alert('이 브라우저는 폴더 읽기를 지원하지 않습니다.\n대신 [부서 파일 읽기]로 파일을 여러 개 선택하세요.'); return }
+  try{
+    const dir = await window.showDirectoryPicker();
+    let ok=0, fail=0;
+    for await (const [nm, h] of dir.entries()){
+      if(h.kind!=='file' || !/\.json$/i.test(nm)) continue;
+      try{ addToLib(await (await h.getFile()).text()); ok++ }catch(e){ fail++ }
+    }
+    await saveLib();
+    srvMsg = `폴더에서 부서 파일 ${ok}개를 읽었습니다.` + (fail?` (${fail}개 건너뜀)`:'');
+    render();
+  }catch(e){ /* 사용자가 취소 */ }
+}
+
+/* ── 열람 목록 (파일 보관소 + 서버) ── */
+function sources(){
+  const out = Object.keys(LIB).map(k=>({id:'file:'+k, name:LIB[k].name, year:LIB[k].year, at:LIB[k].at, from:'file'}));
+  deptList.forEach(x=>{
+    if(!out.some(o=>o.name===x.name && o.year===x.year))
+      out.push({id:'srv:'+x.key, name:x.name, year:x.year, at:x.at, from:'server'});
+  });
+  out.sort((a,b)=> a.name===b.name ? b.year-a.year : a.name.localeCompare(b.name,'ko'));
+  return out;
+}
+
+const skey = n => 'dept:'+String(n).trim().replace(/[\s'"\/\\]/g,'_')+'_';
+async function sGet(k){ try{ const r=await window.storage.get(k,true); return r? JSON.parse(r.value):null }catch(e){ return null } }
+async function sSet(k,v){ await window.storage.set(k, JSON.stringify(v), true) }
+
+async function loadDeptList(){
+  if(!SRV) return;
+  const l = await sGet('depts_index');
+  deptList = Array.isArray(l)? l : [];
+}
+async function srvSave(){
+  if(!SRV){ alert('서버 저장은 Claude 앱 안에서만 됩니다.\n[파일 저장]으로 파일을 만들어 공유 폴더에 넣으세요.'); return }
+  if(ro){ alert('열람 중인 다른 부서 자료는 저장할 수 없습니다.'); return }
+  const name=deptName();
+  if(!name){ alert('안내 탭 기본 정보에 작성 부서명을 먼저 입력하세요.'); return }
+  if(!confirm(`${S.meta.year}년 ${name} 자료를 서버에 저장합니다.\n같은 프로그램을 쓰는 다른 부서도 열람할 수 있습니다. 계속할까요?`)) return;
+  const key = skey(name)+S.meta.year;
+  try{
+    await sSet(key, {name, year:S.meta.year, at:Date.now(), data:S});
+    const idx = deptList.filter(x=>x.key!==key);
+    idx.push({key, name, year:S.meta.year, at:Date.now()});
+    idx.sort((a,b)=> a.name===b.name ? b.year-a.year : a.name.localeCompare(b.name,'ko'));
+    await sSet('depts_index', idx); deptList=idx;
+    srvMsg=`서버에 저장했습니다 · ${nowT()}`; render();
+  }catch(e){ alert('서버 저장에 실패했습니다. 잠시 후 다시 시도하세요.') }
+}
+async function srvLoad(){
+  if(!SRV){ alert('서버 불러오기는 Claude 앱 안에서만 됩니다.\n[파일 열기]로 저장해 둔 파일을 여세요.'); return }
+  const name=deptName();
+  if(!name){ alert('안내 탭 기본 정보에 작성 부서명을 먼저 입력하세요.'); return }
+  const rec = await sGet(skey(name)+S.meta.year);
+  if(!rec){ alert(`서버에 ${S.meta.year}년 ${name} 자료가 없습니다.`); return }
+  if(!confirm(`서버에 저장된 ${S.meta.year}년 ${name} 자료를 불러옵니다.\n지금 화면의 내용은 사라집니다. 계속할까요?`)) return;
+  S = norm(rec.data); ro=false; mine=null; editId=null;
+  save(); srvMsg=`서버에서 불러왔습니다 · ${nowT()}`; render();
+}
+async function readDept(id){
+  const v = id!=null ? id : document.getElementById('deptSel').value;
+  if(!v){                                   // 작성시작 — 내 부서 자료로 복귀
+    if(ro){ S = mine || S; ro=false; mine=null; roName=''; }
+    tab='guide'; per='Q1'; editId=null; srvMsg=''; render(); return;
+  }
+  let rec=null;
+  if(v.indexOf('file:')===0) rec = LIB[v.slice(5)];
+  else rec = await sGet(v.slice(4));
+  if(!rec){ alert('해당 부서 자료를 찾을 수 없습니다.'); return }
+  if(!ro) mine = S;
+  S = norm(rec.data); ro=true; roName = rec.name;
+  tab='guide'; per='Q1'; editId=null; mfil=0;
+  srvMsg=`${rec.name} 자료를 열람 중입니다` + (rec.at?` (저장일 ${new Date(rec.at).toLocaleDateString('ko-KR')})`:'');
+  render();
+}
+
+/* ───────── 계산 ───────── */
+const won = n => (Math.round(+n||0)).toLocaleString('ko-KR');
+const sgn = e => e.type==='수입' ? +e.amount : -e.amount;
+function ents(k){ return S.entries[k]||[] }
+function sorted(k){
+  const a = ents(k).map((e,i)=>({e,i}));
+  if(sortDate) a.sort((x,y)=>{
+    const dx=x.e.date||'9999', dy=y.e.date||'9999';
+    return dx<dy?-1:dx>dy?1:x.i-y.i;
+  });
+  return a.map(x=>x.e);
+}
+function net(k){ return ents(k).reduce((s,e)=>s+sgn(e),0) }
+function opening(k){
+  if(k==='DEC') return +S.openingBalance||0;
+  const i = P.findIndex(p=>p.k===k);
+  return closing(P[i-1].k);
+}
+function closing(k){ return opening(k)+net(k) }
+/* 원본 엑셀 SUMIF와 동일하게 부호를 살려 합산한다(환불·반환 처리).
+   수입 항목은 그대로, 지출 항목은 부호를 뒤집어 양수로 표시한다. */
+function catSum(k,cat){ return ents(k).filter(e=>e.cat===cat).reduce((s,e)=>s+sgn(e),0) }
+function cumSum(uptoK,cat){
+  const idx = QK.indexOf(uptoK);
+  return QK.slice(0, idx<0?4:idx+1).reduce((s,q)=>s+catSum(q,cat),0);
+}
+function catAmt(k,it,isExp){ const v=catSum(k,it); return isExp? -v : v }
+function cumAmt(k,it,isExp){ const v=cumSum(k,it); return isExp? -v : v }
+function settle(){
+  const carry = closing('DEC');
+  const inc = S.incomeItems.map((it,i)=>({
+    name:it.name, budget:it.budget,
+    actual: i===0 ? carry : cumSum('Q4',it.name)
+  }));
+  const exp = S.expenseItems.map(it=>({name:it.name,budget:it.budget,actual:-cumSum('Q4',it.name)}));
+  const incT = inc.reduce((s,x)=>s+x.actual,0);
+  const expT = exp.reduce((s,x)=>s+x.actual,0);
+  const incB = inc.reduce((s,x)=>s+x.budget,0);
+  const expB = exp.reduce((s,x)=>s+x.budget,0);
+  return {carry,inc,exp,incT,expT,incB,expB, dec:incT-expT, next:0, q4:closing('Q4')};
+}
+function knownCats(){ return new Set([...S.incomeItems, ...S.expenseItems].map(i=>i.name)) }
+function orphanCount(){
+  const K=knownCats(); let n=0;
+  P.forEach(p=>ents(p.k).forEach(e=>{ if(!K.has(e.cat)) n++ }));
+  return n;
+}
+
+/* ───────── 렌더 ───────── */
+const TABS = [['guide','안내'],['budget','예산'],['ledger','출납부'],['settle','결산'],['next','새해예산요구'],['data','데이터']];
+function render(){
+  document.getElementById('hTitle').textContent = ro
+    ? `${S.meta.year}년 ${roName} 자료열람`
+    : `${S.meta.year}년 ${S.meta.dept||'부서'} 회계장부`;
+  document.getElementById('hSub').textContent = (S.meta.church? S.meta.church+' · ':'') + `회계기간 ${PERIOD(S.meta.year)}`;
+
+  const src = sources();
+  const opts = ['<option value="">작성시작</option>'].concat(
+    src.map(x=>`<option value="${esc(x.id)}" ${ro&&x.name===roName&&x.year===S.meta.year?'selected':''}>${esc(x.name)} (${x.year}년)</option>`)
+  ).join('');
+  document.getElementById('nav').innerHTML =
+    TABS.map(([k,l])=>`<button data-tab="${k}" class="${tab===k?'on':''}">${l}</button>`).join('')
+    + `<div class="navr"><label>부서 자료</label><select id="deptSel">${opts}</select>
+       <button id="deptRead">읽기</button>
+       <button id="deptAdd" title="부서 파일 읽어오기">＋ 파일</button>
+       <input type="file" id="deptFiles" multiple accept=".json,application/json" style="display:none">
+       <input type="file" id="myFile" accept=".json,application/json" style="display:none"></div>`;
+
+  const banner = ro ? `<div class="robar no-print"><b>읽기 전용</b>
+      <span>${esc(roName)} 부서 자료를 열람 중입니다. 내용을 고칠 수 없습니다.</span>
+      <button class="btn g sm" id="backMine" style="margin-left:auto">내 부서로 돌아가기</button></div>`
+    : (srvMsg? `<div class="robar no-print" style="background:var(--in-bg);border-color:#cfe6da;color:#1d6b4f">${esc(srvMsg)}</div>`:'');
+
+  document.getElementById('view').innerHTML = banner +
+    ({guide:vGuide,budget:vBudget,ledger:vLedger,settle:vSettle,next:vNext,data:vData})[tab]();
+  document.querySelectorAll('#nav button[data-tab]').forEach(b=>b.onclick=()=>{tab=b.dataset.tab;render();window.scrollTo(0,0)});
+  document.getElementById('deptRead').onclick = ()=>readDept();
+  document.getElementById('deptAdd').onclick = ()=>document.getElementById('deptFiles').click();
+  document.getElementById('deptFiles').onchange = e=>{ openDeptFiles(e.target.files); e.target.value='' };
+  document.getElementById('myFile').onchange = e=>{ if(e.target.files[0]) openMyFile(e.target.files[0]); e.target.value='' };
+  bind();
+
+  if(ro){                                   // 열람 모드: 모든 입력 잠금 + 편집 버튼 숨김
+    document.querySelectorAll('#view input,#view select,#view textarea').forEach(el=>el.disabled=true);
+    document.querySelectorAll('#view .no-ro').forEach(el=>el.style.display='none');
+  }
+  if(lastAdd){                              // 방금 입력한 줄이 보이도록 이동 + 강조
+    const tr = document.querySelector(`tr[data-row="${lastAdd}"]`);
+    if(tr){
+      const box = tr.closest('.scroll');
+      try{
+        if(box && box.getBoundingClientRect){
+          const br=box.getBoundingClientRect(), rr=tr.getBoundingClientRect();
+          box.scrollTop += (rr.top - br.top) - box.clientHeight/2 + rr.height;
+        } else if(tr.scrollIntoView){ tr.scrollIntoView({block:'center'}) }
+      }catch(e){}
+      tr.classList.add('hl'); setTimeout(()=>tr.classList.remove('hl'), 1800);
+    }
+    lastAdd=null;
+  }
+}
+
+/* ── 안내 ── */
+function vGuide(){
+  const s=settle();
+  return `
+  ${pHead(`${S.meta.year}년 ${S.meta.dept} 회계장부 안내`, `회계기간 ${PERIOD(S.meta.year)}`)}
+  ${pBar()}
+  <div class="row">
+    <div class="col card" style="flex:2;min-width:340px">
+      <h2>기본 정보</h2>
+      <p class="hint">회계기간은 ${S.meta.year}.1.1 ~ ${S.meta.year}.12.31 입니다. 12월은 가결산으로 잡아 잔고를 0으로 맞춥니다.</p>
+      <div class="row">
+        <div class="col" style="min-width:120px"><label class="hint" style="margin:0">회계연도</label><input type="number" data-meta="year" value="${S.meta.year}"></div>
+        <div class="col" style="min-width:120px"><label class="hint" style="margin:0">작성 부서</label><input type="text" data-meta="dept" value="${S.meta.dept}" placeholder="예: 유초등부"></div>
+      </div>
+      <div style="margin-top:12px"><label class="hint" style="margin:0">${S.meta.year-1}년 11월 말 잔고 <span class="badge b-w">전년 12월 시작액</span></label>
+        <input type="text" class="n" data-open value="${won(S.openingBalance)}"></div>
+    </div>
+    <div class="col card" id="qrCard" style="flex:1;min-width:250px">
+      <h2>프로그램 받기 QR</h2>
+      <p class="hint no-print">프로그램을 올려 둔 주소를 적으면 QR이 만들어집니다. 부서 담당자들이 찍어서 최신 버전을 받아 갑니다. <b>버전 ${APPVER}</b></p>
+      <input type="text" data-meta="url" class="no-print" value="${esc(S.meta.url||'')}" placeholder="https://... 파일 주소">
+      <div id="qrBox" style="text-align:center;margin-top:12px"></div>
+      <div class="tools no-print" style="margin:10px 0 0;justify-content:center">
+        <button class="btn g sm" id="qrHere">현재 주소 넣기</button>
+        <button class="btn g sm" id="qrPng">QR 이미지 저장</button>
+        <button class="btn g sm" id="qrCopy">주소 복사</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col card">
+      <h2>사용 순서</h2>
+      <ol class="steps">
+        <li><b>예산 탭</b>에 수입·지출 항목과 금액을 입력합니다.<small>여기 적은 항목 이름이 출납부의 선택 메뉴가 됩니다. 한 번 정한 이름은 결산까지 바꾸지 마세요.</small></li>
+        <li><b>출납부 › 전년 12월</b>에 ${S.meta.year-1}년 12월 실제 지출을 통장 기준으로 기록합니다.<small>작년 결산 때 가결산으로 잡아 두었던 12월을 실제로 집행한 내역입니다. ${S.meta.year}년 결산과는 별개로 정산·보고하며, 이 잔고가 ${S.meta.year}년 이월금이 됩니다.</small></li>
+        <li><b>1분기(1~3월)</b>부터 <b>4분기</b>까지 순서대로 기록합니다.<small>11월까지 실제 사용을 기록하면 됩니다.</small></li>
+        <li>11월 말 잔고가 통장 잔고와 맞는지 확인합니다.</li>
+        <li><b>결산</b> 탭이 자동으로 작성됩니다.<small>남은 잔고 전액을 12월 가결산(예상 지출)으로 처리하여 ${S.meta.year}년 잔고를 0으로 만듭니다.</small></li>
+        <li><b>새해예산요구</b> 탭에서 ${S.meta.year+1}년 운영계획을 세웁니다.</li>
+        <li>해가 바뀌면 <b>데이터 › 새 회계연도 시작</b>으로 ${S.meta.year+1}년 장부를 엽니다.<small>가결산했던 ${S.meta.year}년 12월은 새 장부의 '전년 12월' 탭에 기록해 별도 보고합니다.</small></li>
+      </ol>
+    </div>
+    <div class="col card">
+      <h2>제출 서류</h2>
+      <ol class="steps">
+        <li>통장 (지출내역 출력)</li>
+        <li>전년 12월 정산자료 <small>출납부 › 전년 12월 인쇄 — ${S.meta.year}년 결산과 별도로 제출</small></li>
+        <li>출납부 — 분기별 수입·지출 내역 <small>각 분기 인쇄 → 총무·팀장 서명 → 보관 및 제출</small></li>
+        <li>영수증 <small>노트에 부착</small></li>
+        <li>결산 보고서 · 새해 예산요구서 <small>결산·새해예산요구 탭에서 인쇄</small></li>
+      </ol>
+      <div class="note" style="margin:14px 0 0"><b>회계기간</b><br>
+        1. 작년 12월 정산자료를 먼저 제출합니다.<br>
+        2. 본 결산은 ${S.meta.year}.1.1 ~ ${S.meta.year}.12.31 입니다.<br>
+        3. 12월은 가결산하여 작성합니다.<br>
+        장부는 매달·매분기 팀장 서명이 필요합니다.</div>
+      <div class="note w" style="margin:10px 0 0"><b>기록을 마치면 꼭 [파일 저장]</b><br>
+        <b>${esc(fileName('json'))}</b> 파일이 만들어집니다. 이 파일을 공유 폴더에 넣어 두면
+        다른 부서도 상단 <b>부서 자료</b> 메뉴에서 볼 수 있습니다.</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>현재 상황</h2>
+    <div class="row">
+      ${P.map(p=>`<div class="col" style="min-width:145px">
+        <div class="hint" style="margin:0">${p.label}${p.prev?' <span class="badge b-w">별도</span>':''}</div>
+        <div class="big">${won(closing(p.k))}</div>
+        <div class="hint" style="margin:0">${p.d(S.meta.year)} · ${ents(p.k).length}건</div>
+      </div>`).join('')}
+    </div>
+    ${orphanCount()?`<div class="note w" style="margin-top:12px">예산에 없는 항목으로 기록된 거래가 ${orphanCount()}건 있습니다. 출납부에서 <span class="badge b-w">미등록</span> 표시를 확인하세요.</div>`:''}
+  </div>`;
+}
+
+/* ── 예산 ── */
+function vBudget(){
+  const incT=S.incomeItems.reduce((s,i)=>s+i.budget,0), expT=S.expenseItems.reduce((s,i)=>s+i.budget,0);
+  return `
+  ${pHead(`${S.meta.year}년 ${S.meta.dept} 운영계획`, `회계기간 ${PERIOD(S.meta.year)} · (1월 1일 기준)`)}
+  ${pBar()}
+  <div class="note">여기 입력한 <b>항목 이름</b>이 출납부의 선택 메뉴가 됩니다. 처음 정한 이름은 정산이 끝날 때까지 변경하지 마세요. 수입 합계와 지출 합계가 같아야 합니다.</div>
+  <div class="row">
+    <div class="col card">
+      <h2>수입 예산</h2>
+      <p class="hint">첫 번째 항목(이월금)은 결산에서 12월 잔고가 자동으로 들어갑니다.</p>
+      <table><thead><tr><th>항목</th><th class="n" style="width:130px">수입액</th><th style="width:34px"></th></tr></thead><tbody>
+      ${S.incomeItems.map((it,i)=>`<tr>
+        <td><input type="text" data-bi="${i}" data-f="name" value="${esc(it.name)}"></td>
+        <td class="n"><input type="text" class="n" data-bi="${i}" data-f="budget" value="${won(it.budget)}"></td>
+        <td class="c">${i===0?'':`<button class="btn dg sm no-ro" data-del-inc="${i}">×</button>`}</td></tr>`).join('')}
+      <tr class="tot"><td>계</td><td class="n">${won(incT)}</td><td></td></tr>
+      </tbody></table>
+      <button class="btn g sm no-ro" style="margin-top:10px" data-add-inc>+ 수입 항목 추가</button>
+    </div>
+    <div class="col card">
+      <h2>지출 예산</h2>
+      <p class="hint">항목 앞에 번호를 붙이면(예: 1.겨울성경학교) 정렬이 쉽습니다.</p>
+      <table><thead><tr><th>항목</th><th class="n" style="width:120px">지출액</th><th style="width:150px">산출근거</th><th style="width:34px"></th></tr></thead><tbody>
+      ${S.expenseItems.map((it,i)=>`<tr>
+        <td><input type="text" data-be="${i}" data-f="name" value="${esc(it.name)}"></td>
+        <td class="n"><input type="text" class="n" data-be="${i}" data-f="budget" value="${won(it.budget)}"></td>
+        <td><input type="text" data-be="${i}" data-f="basis" value="${esc(it.basis)}"></td>
+        <td class="c"><button class="btn dg sm no-ro" data-del-exp="${i}">×</button></td></tr>`).join('')}
+      <tr class="tot"><td>계</td><td class="n">${won(expT)}</td><td colspan="2"></td></tr>
+      </tbody></table>
+      <button class="btn g sm no-ro" style="margin-top:10px" data-add-exp>+ 지출 항목 추가</button>
+    </div>
+  </div>
+  <div class="card" style="display:flex;align-items:center;gap:14px">
+    <b>수지 균형</b>
+    ${incT===expT ? `<span class="badge b-ok">일치 — 수입 ${won(incT)} = 지출 ${won(expT)}</span>`
+      : `<span class="badge b-no">차액 ${won(incT-expT)}원 — 수입 ${won(incT)} / 지출 ${won(expT)}</span>`}
+  </div>
+  <div class="print-only"><div class="sign"><div>담당자</div><div>총무</div><div>팀장</div></div></div>`;
+}
+
+/* ── 출납부 ── */
+function vLedger(){
+  const p = P.find(x=>x.k===per);
+  const list = sorted(per);
+  const K = knownCats();
+  const shown = list.filter(e=>!mfil || (e.date && +e.date.slice(5,7)===mfil));
+  let bal = opening(per);
+  const rows = list.map(e=>{ bal += sgn(e); return {e,bal} }).filter(r=>shown.includes(r.e));
+  const incTot = ents(per).filter(e=>e.type==='수입').reduce((s,e)=>s+e.amount,0);
+  const expTot = ents(per).filter(e=>e.type==='지출').reduce((s,e)=>s+e.amount,0);
+  const ed = editId ? ents(per).find(e=>e.id===editId) : null;
+  const aid = S.incomeItems.find(i=>/교회보조|보조금/.test(i.name));
+
+  const ptitle = p.prev
+    ? `${S.meta.year-1}년 12월 ${S.meta.dept} 수입 및 지출 정산`
+    : `${S.meta.year}년 ${S.meta.dept} ${p.label} 수입 및 지출 내역`;
+  const psub = p.prev
+    ? `${S.meta.year-1}.12.1 ~ ${S.meta.year-1}.12.31 · ${S.meta.year-1}년 가결산분 실집행 정산`
+    : `${p.d(S.meta.year)} · 회계기간 ${PERIOD(S.meta.year)}`;
+
+  return `
+  ${pHead(ptitle, psub)}
+  <div class="chips no-print">
+    ${P.map(x=>`<button class="chip ${x.k===per?'on':''}" data-per="${x.k}">${x.label} · ${x.d(S.meta.year)}</button>`).join('')}
+  </div>
+
+  <div class="card">
+    <h2 class="no-print">${p.label} 수입 및 지출 내역 <span class="hint" style="display:inline">${p.d(S.meta.year)}</span></h2>
+    ${p.prev?`<div class="note no-print"><b>${S.meta.year-1}년 12월은 별도 정산입니다.</b> 작년 결산에서 가결산으로 잡아 두었던 12월을 실제 집행한 내역이며, ${S.meta.year}년 결산(1~12월)에는 포함되지 않고 따로 보고합니다. 여기서 나온 잔고가 ${S.meta.year}년 이월금이 됩니다.</div>`:''}
+
+    <div class="form no-print no-ro">
+      <div><label>관</label><select id="fType"><option ${ed&&ed.type==='지출'?'':'selected'}>수입</option><option ${ed&&ed.type==='지출'?'selected':''}>지출</option></select></div>
+      <div><label>항</label><select id="fCat"></select></div>
+      <div><label>날짜</label><input type="date" id="fDate" value="${ed?ed.date:defDate(p)}"></div>
+      <div><label>금액</label><input type="text" class="n" id="fAmt" value="${ed?won(ed.amount):''}" placeholder="0"></div>
+      <div><label>산출근거 / 비고</label><input type="text" id="fNote" value="${ed?esc(ed.note):''}" placeholder="예: 12월 생일간식"></div>
+      <div style="display:flex;gap:6px">
+        <button class="btn" id="fAdd">${ed?'수정':'추가'}</button>
+        ${ed?`<button class="btn g" id="fCancel">취소</button>`:''}
+      </div>
+    </div>
+
+    <div class="tools no-print">
+      <button class="chip ${mfil===0?'on':''}" data-mf="0">전체</button>
+      ${p.m.map(m=>`<button class="chip ${mfil===m?'on':''}" data-mf="${m}">${m}월</button>`).join('')}
+      <span class="sp"></span>
+      <button class="btn g sm" id="tgSort">${sortDate?'날짜순':'입력순'} ▾</button>
+      ${srvBtns()}
+      <button class="btn g sm" onclick="window.print()">인쇄 (A4)</button>
+    </div>
+
+    <div class="row">
+      <div class="col" style="flex:3;min-width:420px">
+        <div class="scroll"><table>
+          <thead><tr><th style="width:52px">관</th><th>항</th><th style="width:96px">날짜</th><th class="n" style="width:104px">금액</th><th>산출근거</th><th class="n" style="width:108px">잔액</th><th class="no-print" style="width:64px"></th></tr></thead>
+          <tbody>
+            <tr class="sub"><td></td><td>${per==='DEC'?`${S.meta.year-1}년 11월 말 잔고`:per==='Q1'?`${S.meta.year}년 이월금 (전년 12월 정산 잔고)`:'전 분기 잔고'}</td><td></td>
+              <td class="n">${won(opening(per))}</td><td></td><td class="n">${won(opening(per))}</td><td class="no-print"></td></tr>
+            ${rows.map(({e,bal})=>`<tr data-row="${e.id}">
+              <td><span class="badge ${e.type==='수입'?'b-in':'b-out'}">${e.type}</span></td>
+              <td>${esc(e.cat)||'<span class="badge b-w">미지정</span>'}${e.cat&&!K.has(e.cat)?' <span class="badge b-w">미등록</span>':''}</td>
+              <td>${e.date?e.date.slice(5).replace('-','/'):''}</td>
+              <td class="n ${e.type==='수입'?'in':'out'}">${e.type==='수입'?'':'-'}${won(e.amount)}</td>
+              <td>${esc(e.note)}</td>
+              <td class="n">${won(bal)}</td>
+              <td class="c no-print no-ro"><button class="btn g sm" data-ed="${e.id}">✎</button> <button class="btn dg sm" data-rm="${e.id}">×</button></td></tr>`).join('')}
+            <tr class="tot"><td colspan="3">${p.label} 잔고</td><td class="n">${won(net(per))}</td><td></td><td class="n">${won(closing(per))}</td><td class="no-print"></td></tr>
+          </tbody></table></div>
+        ${rows.length===0?'<p class="hint" style="margin-top:10px">아직 기록이 없습니다. 위 입력창에서 추가하세요.</p>':''}
+      </div>
+
+      <div class="col" style="flex:2;min-width:280px">
+        <div class="card" style="margin:0">
+          <h2 style="font-size:14px">${p.label} 정산</h2>
+          <div class="kv"><span>${per==='DEC'?`${S.meta.year-1}년 11월 말 잔고`:per==='Q1'?'이월금':'전 분기 잔고'}</span><b>${won(opening(per))}</b></div>
+          <div class="kv"><span class="in">수입 계</span><b class="in">${won(incTot)}</b></div>
+          <div class="kv"><span class="out">지출 계</span><b class="out">-${won(expTot)}</b></div>
+          <div class="kv" style="border:0"><span><b>잔고</b></span><b class="big">${won(closing(per))}</b></div>
+          ${aid&&per!=='DEC'?`
+          <h2 style="font-size:14px;margin-top:16px">교회보조액</h2>
+          <div class="kv"><span>요구액(예산)</span><b>${won(aid.budget)}</b></div>
+          <div class="kv"><span>지급액(누계)</span><b>${won(cumSum(per,aid.name))}</b></div>
+          <div class="kv" style="border:0"><span>잔액</span><b>${won(aid.budget-cumSum(per,aid.name))}</b></div>`:''}
+        </div>
+        ${itemPanel(per)}
+      </div>
+    </div>
+    <div class="sign print-only"><div>담당자</div><div>총무</div><div>팀장</div></div>
+  </div>`;
+}
+function itemPanel(k){
+  const isQ = k!=='DEC';
+  const r = (arr,cls,ex)=>arr.map(it=>{
+    const s=catAmt(k,it.name,ex), c=isQ?cumAmt(k,it.name,ex):null;
+    return `<tr><td>${esc(it.name)}</td><td class="n ${s?cls:''}">${s?won(s):'-'}</td>${isQ?`<td class="n">${c?won(c):'-'}</td>`:''}</tr>`;
+  }).join('');
+  const si=S.incomeItems.slice(1).reduce((s,i)=>s+catAmt(k,i.name,false),0);
+  const se=S.expenseItems.reduce((s,i)=>s+catAmt(k,i.name,true),0);
+  return `<div class="card" style="margin-top:16px">
+    <h2 style="font-size:14px">항목별 소계</h2>
+    <table><thead><tr><th>수입</th><th class="n">소계</th>${isQ?'<th class="n">누계</th>':''}</tr></thead><tbody>
+    ${r(S.incomeItems.slice(1),'in',false)}
+    <tr class="sub"><td>계</td><td class="n">${won(si)}</td>${isQ?`<td class="n">${won(S.incomeItems.slice(1).reduce((s,i)=>s+cumAmt(k,i.name,false),0))}</td>`:''}</tr>
+    </tbody></table>
+    <table style="margin-top:12px"><thead><tr><th>지출</th><th class="n">소계</th>${isQ?'<th class="n">누계</th>':''}</tr></thead><tbody>
+    ${r(S.expenseItems,'out',true)}
+    <tr class="sub"><td>계</td><td class="n">${won(se)}</td>${isQ?`<td class="n">${won(S.expenseItems.reduce((s,i)=>s+cumAmt(k,i.name,true),0))}</td>`:''}</tr>
+    </tbody></table></div>`;
+}
+function defDate(p){
+  const y = p.k==='DEC' ? S.meta.year-1 : S.meta.year;
+  const last = ents(p.k).slice(-1)[0];
+  if(last&&last.date) return last.date;
+  return `${y}-${String(p.m[0]).padStart(2,'0')}-01`;
+}
+
+/* ── 결산 ── */
+function vSettle(){
+  const s = settle();
+  const ok1 = s.dec === s.q4, ok2 = s.incT === s.expT + s.dec;
+  return `
+  <div class="card">
+    <div class="phead" style="margin-bottom:16px">
+      <div class="ph-c">${esc(S.meta.church||'')}</div>
+      <div class="ph-t">${S.meta.year}년 ${esc(S.meta.dept)} 결산 보고서</div>
+      <div class="ph-s">회계기간 ${PERIOD(S.meta.year)} · 12월은 가결산</div>
+    </div>
+    ${pBar()}
+    <div class="row">
+      <div class="col">
+        <h2 style="font-size:14px">수입 결산</h2>
+        <table><thead><tr><th>항목</th><th class="n">예산</th><th class="n">수입</th><th class="n">증감</th></tr></thead><tbody>
+        ${s.inc.map((x,i)=>`<tr><td>${esc(x.name)}${i===0?` <span class="hint" style="display:inline">(${S.meta.year-1}년 12월 정산 잔고)</span>`:''}</td>
+          <td class="n">${won(x.budget)}</td><td class="n">${won(x.actual)}</td>
+          <td class="n ${x.actual-x.budget<0?'out':''}">${won(x.actual-x.budget)}</td></tr>`).join('')}
+        <tr class="tot"><td>소계</td><td class="n">${won(s.incB)}</td><td class="n">${won(s.incT)}</td><td class="n">${won(s.incT-s.incB)}</td></tr>
+        </tbody></table>
+      </div>
+      <div class="col">
+        <h2 style="font-size:14px">지출 결산</h2>
+        <table><thead><tr><th>항목</th><th class="n">예산</th><th class="n">지출</th><th class="n">증감</th></tr></thead><tbody>
+        ${s.exp.map(x=>`<tr><td>${esc(x.name)}</td><td class="n">${won(x.budget)}</td><td class="n">${won(x.actual)}</td>
+          <td class="n ${x.actual-x.budget>0?'out':''}">${won(x.actual-x.budget)}</td></tr>`).join('')}
+        <tr class="tot"><td>소계</td><td class="n">${won(s.expB)}</td><td class="n">${won(s.expT)}</td><td class="n">${won(s.expT-s.expB)}</td></tr>
+        </tbody></table>
+      </div>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col card">
+      <h2>${S.meta.year}년 결산</h2>
+      <div class="kv"><span>수입 합계</span><b class="in">${won(s.incT)}</b></div>
+      <div class="kv"><span>지출 합계</span><b class="out">${won(s.expT)}</b></div>
+      <div class="kv"><span>12월 가결산 <span class="hint" style="display:inline">(12월 지출 예상액)</span></span><b>${won(s.dec)}</b></div>
+      <div class="kv" style="border:0"><span><b>${S.meta.year}년 잔고</b></span><b class="big">${won(s.incT-s.expT-s.dec)}</b></div>
+      <p class="hint" style="margin-top:10px">11월 말 남은 잔고 전액을 12월 예상 지출(가결산)로 처리하여 ${S.meta.year}년 잔고를 0으로 맞춥니다. 이 12월분은 실제 집행 후 ${S.meta.year+1}년에 별도로 정산·보고합니다.</p>
+    </div>
+    <div class="col card">
+      <h2>검증</h2>
+      <div class="kv"><span>통장 잔고 (4분기 말)</span><b>${won(s.q4)}</b></div>
+      <div class="kv"><span>12월 가결산 = 4분기 잔고</span><span class="badge ${ok1?'b-ok':'b-no'}">${ok1?'일치':'불일치'}</span></div>
+      <div class="kv"><span>수입 = 지출 + 가결산</span><span class="badge ${ok2?'b-ok':'b-no'}">${ok2?'일치':'불일치'}</span></div>
+      <div class="kv" style="border:0"><span>예산 대비 지출 집행률</span><b>${s.expB?Math.round(s.expT/s.expB*100):0}%</b></div>
+      <div class="note" style="margin-top:12px">실제 통장 잔고와 위 금액이 같은지 반드시 확인하세요.</div>
+    </div>
+  </div>
+  <div class="card"><div class="sign"><div>담당자</div><div>총무</div><div>팀장</div></div></div>`;
+}
+
+/* ── 새해예산요구 ── */
+/* 수입 계획 본문 — 새로 추가한 항목은 '기타' 항목 바로 위에 놓는다 */
+function etcIndex(items){
+  for(let i=items.length-1;i>=0;i--) if(/^기타/.test(String(items[i].name).trim())) return i;
+  return -1;
+}
+function incBody(s, nI, xI){
+  const base = S.incomeItems.map((it,i)=>{ const v=+nI[it.name]||0; return `<tr>
+      <td>${esc(it.name)}</td><td class="n">${won(s.inc[i].actual)}</td>
+      <td class="n"><input type="text" class="n" data-ny="i" data-key="${esc(it.name)}" value="${v?won(v):''}"></td>
+      <td class="n ${v-s.inc[i].actual<0?'out':''}">${won(v-s.inc[i].actual)}</td>
+      <td class="hint">${i===0?'전년도 이월금':/교회보조|보조금/.test(it.name)?'교회 보조 요구 금액':''}</td>
+      <td class="no-print no-ro"></td></tr>`});
+  const extra = xI.map((x,i)=>`<tr>
+      <td><input type="text" data-xi="${i}" data-f="name" value="${esc(x.name)}" placeholder="새 수입 항목"></td>
+      <td class="n">-</td>
+      <td class="n"><input type="text" class="n" data-xi="${i}" data-f="amt" value="${x.amt?won(x.amt):''}"></td>
+      <td class="n">${won(x.amt)}</td><td class="hint">신규 항목</td>
+      <td class="c no-print no-ro"><button class="btn dg sm" data-xi-del="${i}">×</button></td></tr>`);
+  const g = etcIndex(S.incomeItems);
+  return g<0 ? base.join('')+extra.join('')
+             : base.slice(0,g).join('')+extra.join('')+base.slice(g).join('');
+}
+
+function vNext(){
+  const s = settle(), ny = S.meta.year+1;
+  const nE = S.nextYear.expense, nI = S.nextYear.income, nB = S.nextYear.basis;
+  const xE = S.nextYear.extraExp, xI = S.nextYear.extraInc;
+  const expT = S.expenseItems.reduce((t,i)=>t+(+nE[i.name]||0),0) + xE.reduce((t,x)=>t+x.amt,0);
+  const incT = S.incomeItems.reduce((t,i)=>t+(+nI[i.name]||0),0) + xI.reduce((t,x)=>t+x.amt,0);
+  const decRef = ents('DEC').filter(e=>e.type==='지출').reduce((t,e)=>t+e.amount,0);
+  return `
+  ${pHead(`${ny}년 ${S.meta.dept} 예산 요구(안)`, `${ny}.1.1 ~ ${ny}.12.31 운영계획 · ${S.meta.year}년 결산 대비`)}
+  <div class="note no-print">${ny}년 부서 운영계획입니다. 올해 결산액이 자동으로 채워지므로 오른쪽 <b>${ny}년 예산</b> 칸만 입력하면 됩니다. 내년에 새로 생기는 항목은 표 아래 <b>항목 추가</b>로 넣으세요. 지출 총계와 수입 총계가 같아야 합니다.</div>
+  ${pBar(`<button class="btn g sm no-ro" id="copyPrev">올해 결산액 그대로 채우기</button>`)}
+
+  <div class="card">
+    <h2>${ny}년 지출 계획</h2>
+    <table><thead><tr><th>항목</th><th class="n" style="width:110px">${S.meta.year}년 지출결산</th><th class="n" style="width:120px">${ny}년 지출예산</th><th class="n" style="width:100px">증감</th><th style="width:190px">산출 내역</th><th class="no-print no-ro" style="width:34px"></th></tr></thead><tbody>
+    ${S.expenseItems.map((it,i)=>{const v=+nE[it.name]||0;return `<tr>
+      <td>${esc(it.name)}</td><td class="n">${won(s.exp[i].actual)}</td>
+      <td class="n"><input type="text" class="n" data-ny="e" data-key="${esc(it.name)}" value="${v?won(v):''}"></td>
+      <td class="n ${v-s.exp[i].actual<0?'out':''}">${won(v-s.exp[i].actual)}</td>
+      <td><input type="text" data-ny="b" data-key="${esc(it.name)}" value="${esc(nB[it.name]||'')}"></td>
+      <td class="no-print no-ro"></td></tr>`}).join('')}
+    ${xE.map((x,i)=>`<tr>
+      <td><input type="text" data-xe="${i}" data-f="name" value="${esc(x.name)}" placeholder="새 지출 항목"></td>
+      <td class="n">-</td>
+      <td class="n"><input type="text" class="n" data-xe="${i}" data-f="amt" value="${x.amt?won(x.amt):''}"></td>
+      <td class="n">${won(x.amt)}</td>
+      <td><input type="text" data-xe="${i}" data-f="basis" value="${esc(x.basis)}"></td>
+      <td class="c no-print no-ro"><button class="btn dg sm" data-xe-del="${i}">×</button></td></tr>`).join('')}
+    <tr class="sub"><td>12월 가결산 (예상 지출)</td><td class="n">${won(s.dec)}</td><td class="n">—</td><td class="n"></td><td class="hint">전년 12월 실제 지출 ${won(decRef)}원 기준</td><td class="no-print no-ro"></td></tr>
+    <tr class="tot"><td>총계</td><td class="n">${won(s.expT+s.dec)}</td><td class="n">${won(expT)}</td><td class="n">${won(expT-s.expT)}</td><td></td><td class="no-print no-ro"></td></tr>
+    </tbody></table>
+    <button class="btn g sm no-ro" style="margin-top:10px" id="addXE">+ 지출 항목 추가</button>
+  </div>
+
+  <div class="card">
+    <h2>${ny}년 수입 계획</h2>
+    <table><thead><tr><th>항목</th><th class="n" style="width:110px">${S.meta.year}년 수입결산</th><th class="n" style="width:120px">${ny}년 수입예산</th><th class="n" style="width:100px">증감</th><th style="width:190px">비고</th><th class="no-print no-ro" style="width:34px"></th></tr></thead><tbody>
+    ${incBody(s, nI, xI)}
+    <tr class="tot"><td>총계</td><td class="n">${won(s.incT)}</td><td class="n">${won(incT)}</td><td class="n">${won(incT-s.incT)}</td><td></td><td class="no-print no-ro"></td></tr>
+    </tbody></table>
+    <button class="btn g sm no-ro" style="margin-top:10px" id="addXI">+ 수입 항목 추가</button>
+    <div style="margin-top:14px;display:flex;align-items:center;gap:12px">
+      <b>수지 균형</b>
+      ${expT===incT&&expT>0?`<span class="badge b-ok">일치 — ${won(expT)}</span>`:`<span class="badge ${expT||incT?'b-no':'b-w'}">지출 ${won(expT)} / 수입 ${won(incT)} · 차액 ${won(incT-expT)}</span>`}
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>증감 요인 / 협의 내용</h2>
+    <textarea data-ny="n" rows="4" placeholder="예산 증액·감액 사유, 결산 협의 내용을 적어 두세요.">${esc(S.nextYear.note||'')}</textarea>
+  </div>
+  <div class="card"><div class="sign"><div>담당자</div><div>총무</div><div>팀장</div></div></div>`;
+}
+
+/* ── 데이터 ── */
+function vData(){
+  const s=settle();
+  const mode = window.storage ? 'Claude 앱 내부 저장소' : '이 브라우저';
+  const cnt = P.reduce((t,p)=>t+ents(p.k).length,0);
+  const lib = sources().filter(x=>x.from==='file');
+  return `
+  ${pHead(`${S.meta.year}년 ${S.meta.dept} 데이터 관리`, `회계기간 ${PERIOD(S.meta.year)}`)}
+  ${pBar()}
+
+  <div class="card">
+    <h2>내 부서 자료 저장</h2>
+    <div class="kv"><span>저장될 파일 이름</span><b>${esc(fileName('json'))}</b></div>
+    <div class="kv"><span>자동 저장 (작업 중 임시 보관)</span><b>${mode}</b></div>
+    <div class="kv" style="border:0"><span>현재 보관 중인 거래</span><b>${cnt}건</b></div>
+    <div class="tools no-ro" style="margin-top:12px">
+      <button class="btn" id="fSave">파일로 저장</button>
+      <button class="btn g" id="fOpen">파일 열기</button>
+      <button class="btn g" id="xExcel">엑셀(.xlsx)로 내보내기</button>
+    </div>
+    <div class="note" style="margin-top:12px">
+      입력하는 동안은 이 기기에 자동 보관되지만, <b>기록을 마치면 반드시 [파일로 저장]</b>을 눌러 파일을 만드세요.
+      그 파일을 <b>공유 폴더</b>(구글 드라이브·원드라이브 등)에 넣어 두면 다른 부서도 볼 수 있습니다.
+      브라우저 데이터를 지우면 자동 보관분은 사라지지만, 저장해 둔 파일은 그대로 남습니다.
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>다른 부서 자료 보기</h2>
+    <p class="hint">공유 폴더에 모인 부서 파일들을 읽어 두면, 상단 <b>부서 자료</b> 메뉴에서 언제든 열람할 수 있습니다.</p>
+    <div class="tools">
+      <button class="btn" id="libAdd">부서 파일 읽기</button>
+      ${window.showDirectoryPicker?`<button class="btn g" id="libFolder">폴더 통째로 읽기</button>`:''}
+      ${lib.length?`<button class="btn g" id="libClear">목록 비우기</button>`:''}
+    </div>
+    ${lib.length? `<table style="margin-top:12px"><thead><tr><th>부서</th><th class="c" style="width:80px">회계연도</th><th style="width:130px">저장일</th><th class="c" style="width:130px"></th></tr></thead><tbody>
+      ${lib.map(x=>`<tr><td>${esc(x.name)}</td><td class="c">${x.year}년</td>
+        <td>${x.at? new Date(x.at).toLocaleDateString('ko-KR') : '-'}</td>
+        <td class="c"><button class="btn g sm" data-lib-read="${esc(x.id)}">열람</button>
+          <button class="btn dg sm" data-lib-del="${esc(x.id)}">×</button></td></tr>`).join('')}
+      </tbody></table>`
+      : `<p class="hint" style="margin-top:10px">아직 읽어 둔 부서 파일이 없습니다. 공유 폴더에서 <b>${String(S.meta.year).slice(2)}회계</b> 파일들을 한꺼번에 선택하세요.</p>`}
+    <div class="note" style="margin-top:12px">
+      파일 선택 창에서 <b>Ctrl+A</b>(전체 선택)로 여러 부서 파일을 한 번에 읽을 수 있습니다.
+      같은 부서 파일을 다시 읽으면 <b>최신 것으로 바뀝니다.</b> 다른 부서 자료는 보기만 되고 고칠 수 없습니다.
+    </div>
+  </div>
+
+  ${SRV?`<div class="card">
+    <h2>서버 저장 <span class="badge b-ok">Claude 앱</span></h2>
+    <p class="hint">Claude 앱에서 열었을 때만 쓸 수 있습니다. 내려받아 쓰실 때는 위의 파일 방식을 이용하세요.</p>
+    <div class="tools no-ro"><button class="btn g" id="sSaveBtn">서버에 저장</button>
+      <button class="btn g" id="sLoadBtn">서버에서 불러오기</button></div>
+  </div>`:''}
+
+  <div class="card">
+    <h2>새 회계연도 시작</h2>
+    <p class="hint">결산이 끝난 뒤 사용하세요. ${S.meta.year+1}년 장부를 만들고, 새해예산요구에 입력한 금액을 예산으로 옮깁니다. 가결산으로 잡아 둔 ${S.meta.year}년 12월은 새 장부의 <b>전년 12월</b> 탭에 실제 지출을 기록해 별도 보고합니다.</p>
+    <div class="kv"><span>새 회계연도</span><b>${S.meta.year+1}년 (${PERIOD(S.meta.year+1)})</b></div>
+    <div class="kv"><span>${S.meta.year}년 11월 말 잔고 → 전년 12월 탭 시작액</span><b>${won(s.q4)}</b></div>
+    <div class="kv" style="border:0"><span>거래 내역</span><b>모두 비움</b></div>
+    <div class="tools no-ro" style="margin-top:14px"><button class="btn" id="newYear">${S.meta.year+1}년 장부 시작</button>
+      <span class="hint" style="margin:0">먼저 [파일로 저장]을 눌러 올해 자료를 보관하세요.</span></div>
+  </div>
+
+  <div class="card">
+    <h2>초기화</h2>
+    <p class="hint">내 부서 기록을 모두 지우고 빈 장부로 되돌립니다. 되돌릴 수 없습니다. (읽어 둔 다른 부서 목록은 남습니다.)</p>
+    <button class="btn dg no-ro" id="wipe">전체 초기화</button>
+    <p class="hint" style="margin-top:16px">프로그램 버전 ${APPVER}</p>
+  </div>`;
+}
+
+/* ───────── 이벤트 ───────── */
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])) }
+function num(v){ const n=parseInt(String(v).replace(/[^0-9-]/g,''),10); return isNaN(n)?0:n }
+function $(s){ return document.querySelector(s) }
+function on(sel,ev,fn){ document.querySelectorAll(sel).forEach(el=>el.addEventListener(ev,fn)) }
+
+/* ───────── 공유 QR ───────── */
+function qrMatrix(){
+  const u=(S.meta.url||'').trim();
+  if(!u) return null;
+  try{ return QR.build(u) }catch(e){ return 'ERR' }
+}
+function drawQR(){
+  const box=document.getElementById('qrBox'); if(!box) return;
+  const m=qrMatrix();
+  if(!m){ box.innerHTML='<div class="hint" style="padding:22px 0">주소를 입력하면 QR이 나타납니다.</div>'; return }
+  if(m==='ERR'){ box.innerHTML='<div class="hint" style="padding:22px 0">주소가 너무 길어 QR을 만들 수 없습니다.</div>'; return }
+  const n=m.length, q=4, t=n+q*2, px=Math.max(3, Math.floor(190/t));
+  let d='';
+  for(let y=0;y<n;y++) for(let x=0;x<n;x++) if(m[y][x]) d+=`M${x+q} ${y+q}h1v1h-1z`;
+  box.innerHTML = `<svg width="${t*px}" height="${t*px}" viewBox="0 0 ${t} ${t}"
+      xmlns="http://www.w3.org/2000/svg" style="background:#fff;border:1px solid var(--line);border-radius:6px">
+      <path d="${d}" fill="#111"/></svg>
+    <div class="hint" style="margin:6px 0 0;word-break:break-all">${esc(S.meta.url)}</div>`;
+}
+function savePNG(){
+  const m=qrMatrix();
+  if(!m || m==='ERR'){ alert('먼저 올바른 주소를 입력하세요.'); return }
+  const n=m.length, q=4, t=n+q*2, px=10;
+  const c=document.createElement('canvas'); c.width=c.height=t*px;
+  const g=c.getContext('2d');
+  g.fillStyle='#fff'; g.fillRect(0,0,c.width,c.height);
+  g.fillStyle='#000';
+  for(let y=0;y<n;y++) for(let x=0;x<n;x++) if(m[y][x]) g.fillRect((x+q)*px,(y+q)*px,px,px);
+  c.toBlob(b=>dl(b, `${S.meta.year}년_${S.meta.dept||'부서'}_QR.png`));
+}
+
+function bind(){
+  on('[data-meta]','change',e=>{ const f=e.target.dataset.meta;
+    S.meta[f] = f==='year'? (parseInt(e.target.value)||S.meta.year) : e.target.value;
+    save(); if(f==='url'){ drawQR() } else { render() } });
+  on('[data-meta="url"]','input',()=>{ S.meta.url=$('[data-meta=\"url\"]').value; drawQR() });
+  on('[data-open]','change',e=>{ S.openingBalance=num(e.target.value); save(); render() });
+
+  on('[data-bi]','change',e=>{ const i=+e.target.dataset.bi,f=e.target.dataset.f;
+    if(f==='budget') S.incomeItems[i].budget=num(e.target.value);
+    else { const old=S.incomeItems[i].name, nv=e.target.value.trim(); renameCat(old,nv); S.incomeItems[i].name=nv }
+    save(); render() });
+  on('[data-be]','change',e=>{ const i=+e.target.dataset.be,f=e.target.dataset.f;
+    if(f==='budget') S.expenseItems[i].budget=num(e.target.value);
+    else if(f==='basis') S.expenseItems[i].basis=e.target.value;
+    else { const old=S.expenseItems[i].name, nv=e.target.value.trim(); renameCat(old,nv); S.expenseItems[i].name=nv }
+    save(); render() });
+  on('[data-add-inc]','click',()=>{ S.incomeItems.push({name:'새 수입항목',budget:0}); save(); render() });
+  on('[data-add-exp]','click',()=>{ S.expenseItems.push({name:(S.expenseItems.length+1)+'.새 지출항목',budget:0,basis:''}); save(); render() });
+  on('[data-del-inc]','click',e=>{ const i=+e.target.dataset.delInc;
+    if(used(S.incomeItems[i].name) && !confirm('이 항목으로 기록된 거래가 있습니다. 그래도 삭제할까요?')) return;
+    S.incomeItems.splice(i,1); save(); render() });
+  on('[data-del-exp]','click',e=>{ const i=+e.target.dataset.delExp;
+    if(used(S.expenseItems[i].name) && !confirm('이 항목으로 기록된 거래가 있습니다. 그래도 삭제할까요?')) return;
+    S.expenseItems.splice(i,1); save(); render() });
+
+  on('[data-per]','click',e=>{ per=e.target.dataset.per; mfil=0; editId=null; render() });
+  on('[data-mf]','click',e=>{ mfil=+e.target.dataset.mf; render() });
+  if($('#tgSort')) $('#tgSort').onclick=()=>{ sortDate=!sortDate; render() };
+  on('[data-rm]','click',e=>{ const id=e.target.dataset.rm;
+    if(!confirm('이 거래를 삭제할까요?')) return;
+    S.entries[per]=ents(per).filter(x=>x.id!==id); if(editId===id) editId=null; save(); render() });
+  on('[data-ed]','click',e=>{ editId=e.target.dataset.ed; render();
+    const el=$('#fAmt'); if(el) el.focus() });
+
+  const ft=$('#fType');
+  if(ft){
+    const fill=()=>{
+      const list = ft.value==='수입'? S.incomeItems : S.expenseItems;
+      const cur = editId ? (ents(per).find(x=>x.id===editId)||{}).cat : null;
+      $('#fCat').innerHTML = list.length
+        ? list.map(i=>`<option ${i.name===cur?'selected':''}>${esc(i.name)}</option>`).join('')
+        : '<option value="">예산 탭에서 항목을 먼저 등록하세요</option>';
+    };
+    ft.onchange=fill; fill();
+    const add=()=>{
+      const amt=num($('#fAmt').value), cat=$('#fCat').value;
+      if(!cat){ alert('예산 탭에서 항목을 먼저 등록하세요.'); return }
+      if(!amt){ $('#fAmt').focus(); return }
+      const rec={type:ft.value,cat,date:$('#fDate').value,amount:Math.abs(amt),note:$('#fNote').value.trim()};
+      if(editId){ const i=ents(per).findIndex(x=>x.id===editId); S.entries[per][i]=Object.assign({id:editId},rec); lastAdd=editId; editId=null }
+      else { const id=uid(); S.entries[per].push(Object.assign({id},rec)); lastAdd=id }
+      const mo = rec.date? +rec.date.slice(5,7) : 0;      // 걸러져 안 보이면 필터 해제
+      if(mfil && mo!==mfil) mfil=0;
+      save(); render();
+      const a=$('#fAmt'); if(a) a.focus();
+    };
+    $('#fAdd').onclick=add;
+    ['fAmt','fNote'].forEach(id=>{ const el=$('#'+id); if(el) el.onkeydown=ev=>{ if(ev.key==='Enter') add() } });
+    if($('#fCancel')) $('#fCancel').onclick=()=>{ editId=null; render() };
+  }
+
+  on('[data-ny]','change',e=>{ const t=e.target.dataset.ny, k=e.target.dataset.key;
+    if(t==='e') S.nextYear.expense[k]=num(e.target.value);
+    else if(t==='i') S.nextYear.income[k]=num(e.target.value);
+    else if(t==='b') S.nextYear.basis[k]=e.target.value;
+    else S.nextYear.note=e.target.value;
+    save(); if(t!=='b'&&t!=='n') render() });
+  if($('#copyPrev')) $('#copyPrev').onclick=()=>{
+    const s=settle();
+    S.expenseItems.forEach((it,i)=>S.nextYear.expense[it.name]=s.exp[i].actual);
+    S.incomeItems.forEach((it,i)=>S.nextYear.income[it.name]=s.inc[i].actual);
+    save(); render();
+  };
+
+  on('[data-srv]','click',e=>{
+    if(e.target.dataset.srv==='save') saveFile();
+    else document.getElementById('myFile').click();
+  });
+  drawQR();
+  if($('#qrHere')) $('#qrHere').onclick=()=>{
+    let u='';
+    try{ u=String(location.href).split('#')[0] }catch(e){}
+    if(!/^https?:\/\//.test(u)){ alert('이 화면의 주소를 읽을 수 없습니다. 주소창의 주소를 직접 붙여넣어 주세요.'); return }
+    S.meta.url=u; save(); render();
+  };
+  if($('#qrPng')) $('#qrPng').onclick=()=>savePNG();
+  if($('#qrCopy')) $('#qrCopy').onclick=()=>{
+    const u=(S.meta.url||'').trim();
+    if(!u){ alert('먼저 주소를 입력하세요.'); return }
+    try{ navigator.clipboard.writeText(u); srvMsg='주소를 복사했습니다.'; render() }
+    catch(e){ alert(u) }
+  };
+  const bm=$('#backMine'); if(bm) bm.onclick=()=>{ if(ro){ S=mine||S; ro=false; mine=null; roName=''; srvMsg=''; tab='guide'; render() } };
+
+  on('[data-xe]','change',e=>{ const i=+e.target.dataset.xe, f=e.target.dataset.f;
+    S.nextYear.extraExp[i][f] = f==='amt'? num(e.target.value) : e.target.value; save(); render() });
+  on('[data-xi]','change',e=>{ const i=+e.target.dataset.xi, f=e.target.dataset.f;
+    S.nextYear.extraInc[i][f] = f==='amt'? num(e.target.value) : e.target.value; save(); render() });
+  on('[data-xe-del]','click',e=>{ S.nextYear.extraExp.splice(+e.target.dataset.xeDel,1); save(); render() });
+  on('[data-xi-del]','click',e=>{ S.nextYear.extraInc.splice(+e.target.dataset.xiDel,1); save(); render() });
+  if($('#addXE')) $('#addXE').onclick=()=>{ S.nextYear.extraExp.push({name:'',amt:0,basis:''}); save(); render() };
+  if($('#addXI')) $('#addXI').onclick=()=>{ S.nextYear.extraInc.push({name:'',amt:0}); save(); render() };
+
+  if($('#fSave')) $('#fSave').onclick=saveFile;
+  if($('#fOpen')) $('#fOpen').onclick=()=>document.getElementById('myFile').click();
+  if($('#libAdd')) $('#libAdd').onclick=()=>document.getElementById('deptFiles').click();
+  if($('#libFolder')) $('#libFolder').onclick=readFolder;
+  if($('#libClear')) $('#libClear').onclick=()=>{
+    if(!confirm('읽어 둔 다른 부서 목록을 모두 지웁니다. 원본 파일은 그대로 남습니다. 계속할까요?')) return;
+    LIB={}; saveLib(); srvMsg=''; render();
+  };
+  on('[data-lib-read]','click',e=>readDept(e.target.dataset.libRead));
+  on('[data-lib-del]','click',e=>{ delete LIB[e.target.dataset.libDel.slice(5)]; saveLib(); render() });
+  if($('#sSaveBtn')) $('#sSaveBtn').onclick=srvSave;
+  if($('#sLoadBtn')) $('#sLoadBtn').onclick=srvLoad;
+  if($('#xExcel')) $('#xExcel').onclick=exportExcel;
+  if($('#newYear')) $('#newYear').onclick=()=>{
+    if(!confirm(`${S.meta.year+1}년 장부를 새로 시작합니다. 현재 기록은 사라집니다. 백업하셨나요?`)) return;
+    const s=settle(), y=S.meta.year+1;
+    const baseInc=S.incomeItems.map(i=>({name:i.name,budget:+S.nextYear.income[i.name]||0}));
+    const newInc=S.nextYear.extraInc.filter(x=>x.name.trim()).map(x=>({name:x.name.trim(),budget:x.amt}));
+    const g=etcIndex(baseInc);
+    const inc = g<0 ? baseInc.concat(newInc)
+                    : baseInc.slice(0,g).concat(newInc, baseInc.slice(g));
+    const exp=S.expenseItems.map(i=>({name:i.name,budget:+S.nextYear.expense[i.name]||0,basis:S.nextYear.basis[i.name]||''}))
+      .concat(S.nextYear.extraExp.filter(x=>x.name.trim()).map(x=>({name:x.name.trim(),budget:x.amt,basis:x.basis})));
+    S={meta:{year:y,dept:S.meta.dept,church:S.meta.church},openingBalance:s.q4,
+       incomeItems:inc,expenseItems:exp,entries:{DEC:[],Q1:[],Q2:[],Q3:[],Q4:[]},
+       nextYear:{expense:{},income:{},basis:{},extraExp:[],extraInc:[],dec:0,note:''}};
+    save(); tab='guide'; per='DEC'; render();
+  };
+  if($('#wipe')) $('#wipe').onclick=()=>{
+    if(!confirm('모든 기록을 지웁니다. 계속할까요?')) return;
+    if(!confirm('정말 지울까요? 되돌릴 수 없습니다.')) return;
+    S=norm(fresh()); save(); tab='guide'; render();
+  };
+}
+function used(name){ return P.some(p=>ents(p.k).some(e=>e.cat===name)) }
+function renameCat(oldN,newN){
+  if(!oldN||!newN||oldN===newN) return;
+  P.forEach(p=>ents(p.k).forEach(e=>{ if(e.cat===oldN) e.cat=newN }));
+  ['expense','income','basis'].forEach(g=>{
+    if(S.nextYear[g] && oldN in S.nextYear[g]){ S.nextYear[g][newN]=S.nextYear[g][oldN]; delete S.nextYear[g][oldN] }
+  });
+}
+function dl(blob,name){
+  const u=URL.createObjectURL(blob), a=document.createElement('a');
+  a.href=u; a.download=name; a.click(); setTimeout(()=>URL.revokeObjectURL(u),2000);
+}
+
+/* ───────── 엑셀 내보내기 ───────── */
+function loadXLSX(){
+  return new Promise((res,rej)=>{
+    if(window.XLSX) return res();
+    const s=document.createElement('script');
+    s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+    s.onload=res; s.onerror=rej; document.head.appendChild(s);
+  });
+}
+async function exportExcel(){
+  try{ await loadXLSX() }catch(e){ alert('인터넷 연결이 없어 엑셀 변환을 할 수 없습니다. 백업(.json) 파일을 대신 사용하세요.'); return }
+  const s=settle(), wb=XLSX.utils.book_new(), A=(a,n)=>XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(a),n);
+
+  const b=[[`${S.meta.year}년 ${S.meta.dept} 운영계획`],[],['수입 항목','수입액','','지출 항목','지출액','산출근거']];
+  const L=Math.max(S.incomeItems.length,S.expenseItems.length);
+  for(let i=0;i<L;i++){
+    const a=S.incomeItems[i], c=S.expenseItems[i];
+    b.push([a?a.name:'',a?a.budget:'','',c?c.name:'',c?c.budget:'',c?c.basis:'']);
+  }
+  b.push(['계',S.incomeItems.reduce((t,i)=>t+i.budget,0),'','계',S.expenseItems.reduce((t,i)=>t+i.budget,0),'']);
+  A(b,'예산');
+
+  P.forEach(p=>{
+    const a=[[`${S.meta.dept} ${p.d(S.meta.year)} 수입 및 지출 내역`],[],['관','항','날짜','금액','산출근거','잔액']];
+    let bal=opening(p.k);
+    a.push(['',p.k==='DEC'?`${S.meta.year-1}년 11월 이월금`:'전 분기 잔고','',bal,'',bal]);
+    sorted(p.k).forEach(e=>{ bal+=sgn(e); a.push([e.type,e.cat,e.date,sgn(e),e.note,bal]) });
+    a.push([`${p.label} 잔고`,'','',net(p.k),'',closing(p.k)]);
+    a.push([],['항목별 소계'],['구분','항목','소계','누계']);
+    S.incomeItems.slice(1).forEach(i=>a.push(['수입',i.name,catAmt(p.k,i.name,false),p.k==='DEC'?'':cumAmt(p.k,i.name,false)]));
+    S.expenseItems.forEach(i=>a.push(['지출',i.name,catAmt(p.k,i.name,true),p.k==='DEC'?'':cumAmt(p.k,i.name,true)]));
+    A(a,p.label);
+  });
+
+  const c=[[`${S.meta.year}년 ${S.meta.dept} 결산 보고서`],[],
+    ['수입 항목','예산','수입','','지출 항목','예산','지출','증감']];
+  const M=Math.max(s.inc.length,s.exp.length);
+  for(let i=0;i<M;i++){
+    const x=s.inc[i], y=s.exp[i];
+    c.push([x?x.name:'',x?x.budget:'',x?x.actual:'','',y?y.name:'',y?y.budget:'',y?y.actual:'',y?y.actual-y.budget:'']);
+  }
+  c.push(['소계',s.incB,s.incT,'','소계',s.expB,s.expT,s.expT-s.expB],[],
+    ['수입 합계',s.incT],['지출 합계',s.expT],['12월 가결산',s.dec],['이월금',s.incT-s.expT-s.dec]);
+  A(c,'결산');
+
+  const n=[[`${S.meta.year+1}년 ${S.meta.dept} 예산 요구(안)`],[],
+    ['지출 항목',`${S.meta.year}년 결산`,`${S.meta.year+1}년 예산`,'증감','산출내역']];
+  S.expenseItems.forEach((it,i)=>{const v=+S.nextYear.expense[it.name]||0;
+    n.push([it.name,s.exp[i].actual,v,v-s.exp[i].actual,S.nextYear.basis[it.name]||''])});
+  S.nextYear.extraExp.filter(x=>x.name.trim()).forEach(x=>n.push([x.name,0,x.amt,x.amt,x.basis]));
+  n.push(['12월 가결산',s.dec,'','',''],
+    ['총계',s.expT+s.dec,S.expenseItems.reduce((t,i)=>t+(+S.nextYear.expense[i.name]||0),0)+S.nextYear.extraExp.reduce((t,x)=>t+x.amt,0)],[],
+    ['수입 항목',`${S.meta.year}년 결산`,`${S.meta.year+1}년 예산`,'증감']);
+  S.incomeItems.forEach((it,i)=>{const v=+S.nextYear.income[it.name]||0;
+    n.push([it.name,s.inc[i].actual,v,v-s.inc[i].actual])});
+  S.nextYear.extraInc.filter(x=>x.name.trim()).forEach(x=>n.push([x.name,0,x.amt,x.amt]));
+  n.push(['총계',s.incT,S.incomeItems.reduce((t,i)=>t+(+S.nextYear.income[i.name]||0),0)+S.nextYear.extraInc.reduce((t,x)=>t+x.amt,0)],[],
+    ['증감 요인 / 협의 내용'],[S.nextYear.note||'']);
+  A(n,'새해예산요구');
+
+  XLSX.writeFile(wb, `${S.meta.year}년_${S.meta.dept||'부서'}_회계장부.xlsx`);
+}
+
+/* ───────── 시작 ───────── */
+(async function(){
+  const raw = await store.get(KEY);
+  if(raw){ try{ S=norm(JSON.parse(raw)) }catch(e){ S=norm(typeof SEED!=='undefined'?SEED:fresh()) } }
+  else { S=norm(typeof SEED!=='undefined'?SEED:fresh()); await store.set(KEY, JSON.stringify(S)) }
+  try{ const l=await store.get(LIBKEY); if(l) LIB=JSON.parse(l)||{} }catch(e){ LIB={} }
+  setStatus('임시 보관됨');
+  render();
+  try{ await loadDeptList(); render() }catch(e){}
+})();
+</script>
