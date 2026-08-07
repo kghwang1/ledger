@@ -124,6 +124,7 @@ ol.steps small{color:var(--mute);display:block}
   table.ws{min-width:290px}          /* 현재 상황 */
   table.wi{min-width:300px}          /* 수입결산 */
   table.we{min-width:400px}          /* 지출결산 */
+  table.wi2{min-width:200px}         /* 수입 계획 */
   .navr select{min-width:96px}
 }
 .sign{display:flex;gap:26px;justify-content:flex-end;margin-top:26px;font-size:12.5px;color:var(--ink2)}
@@ -147,7 +148,7 @@ ol.steps small{color:var(--mute);display:block}
   .col{width:100%!important;min-width:0!important;flex:none!important;margin:0 0 6mm}
   .scroll{max-height:none;overflow:visible;border:0;border-radius:0}
   table{width:100%;max-width:100%;font-size:9pt;border-collapse:collapse}
-  table.lg,table.wt,table.wb,table.wn,table.ws,table.wi,table.we{min-width:0!important}
+  table.lg,table.wt,table.wb,table.wn,table.ws,table.wi,table.we,table.wi2{min-width:0!important}
   .card{overflow:visible!important}
   .swipe{display:none!important}
   .scroll table{font-size:8.6pt}
@@ -498,7 +499,7 @@ function setStatus(t){ const el=document.getElementById('hSt'); if(el) el.textCo
 window.addEventListener('beforeunload', e=>{ if(dirty){ e.preventDefault(); e.returnValue='' } });
 
 /* ───────── 서버(공유) 저장 ───────── */
-const APPVER = '2026.20';
+const APPVER = '2026.21';
 const LIBKEY = 'church_ledger_lib_v1';
 const DATASHEET = '_data', DATATAG = 'CHURCH_LEDGER_V1';
 const XLSXMIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -900,7 +901,7 @@ function vBudget(){
     <div class="col card">
       <h2>수입 계획</h2>
       <p class="hint">첫 번째 항목(이월금)은 결산에서 12월 잔고가 자동으로 들어갑니다.</p>
-      <table class="wb"><thead><tr><th style="width:84px">항목</th><th class="n" style="width:77px">수입액</th><th style="width:34px"></th></tr></thead><tbody>
+      <table class="wi2"><thead><tr><th style="width:59px">항목</th><th class="n" style="width:54px">수입액</th><th style="width:34px"></th></tr></thead><tbody>
       ${S.incomeItems.map((it,i)=>`<tr>
         <td><input type="text" data-bi="${i}" data-f="name" value="${esc(it.name)}"></td>
         <td class="n"><input type="text" class="n" data-bi="${i}" data-f="budget" value="${won(it.budget)}"></td>
