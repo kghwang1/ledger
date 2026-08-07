@@ -119,6 +119,7 @@ ol.steps small{color:var(--mute);display:block}
   table.lg{min-width:690px}          /* 출납부 — 항목 칸을 넉넉히 */
   table.wt{min-width:560px}          /* 결산·새해예산요구 */
   table.wb{min-width:440px}          /* 예산 */
+  table.wn{min-width:700px}          /* 새해예산요구 */
   .navr select{min-width:96px}
 }
 .sign{display:flex;gap:26px;justify-content:flex-end;margin-top:26px;font-size:12.5px;color:var(--ink2)}
@@ -142,7 +143,7 @@ ol.steps small{color:var(--mute);display:block}
   .col{width:100%!important;min-width:0!important;flex:none!important;margin:0 0 6mm}
   .scroll{max-height:none;overflow:visible;border:0;border-radius:0}
   table{width:100%;max-width:100%;font-size:9pt;border-collapse:collapse}
-  table.lg,table.wt,table.wb{min-width:0!important}
+  table.lg,table.wt,table.wb,table.wn{min-width:0!important}
   .card{overflow:visible!important}
   .swipe{display:none!important}
   .scroll table{font-size:8.6pt}
@@ -490,7 +491,7 @@ function setStatus(t){ const el=document.getElementById('hSt'); if(el) el.textCo
 window.addEventListener('beforeunload', e=>{ if(dirty){ e.preventDefault(); e.returnValue='' } });
 
 /* ───────── 서버(공유) 저장 ───────── */
-const APPVER = '2026.5';
+const APPVER = '2026.6';
 const LIBKEY = 'church_ledger_lib_v1';
 let LIB = {};                                       // 다른 부서 파일 보관소
 const SRV = !!window.storage;                       // Claude 앱 안에서만 서버 저장 가능
@@ -1131,7 +1132,7 @@ function vNext(){
 
   <div class="card">
     <h2>${ny}년 지출 계획</h2>
-    <table class="wt"><thead><tr><th>항목</th><th class="n" style="width:110px">${S.meta.year}년 지출결산</th><th class="n" style="width:120px">${ny}년 지출예산</th><th class="n" style="width:100px">증감</th><th style="width:190px">산출 내역</th><th class="no-print no-ro" style="width:34px"></th></tr></thead><tbody>
+    <table class="wn"><thead><tr><th style="width:150px">항목</th><th class="n" style="width:110px">${S.meta.year}년 지출결산</th><th class="n" style="width:120px">${ny}년 지출예산</th><th class="n" style="width:100px">증감</th><th style="width:190px">산출 내역</th><th class="no-print no-ro" style="width:34px"></th></tr></thead><tbody>
     ${S.expenseItems.map((it,i)=>{const v=+nE[it.name]||0;return `<tr>
       <td>${esc(it.name)}</td><td class="n">${won(s.exp[i].actual)}</td>
       <td class="n"><input type="text" class="n" data-ny="e" data-key="${esc(it.name)}" value="${v?won(v):''}"></td>
@@ -1153,7 +1154,7 @@ function vNext(){
 
   <div class="card">
     <h2>${ny}년 수입 계획</h2>
-    <table class="wt"><thead><tr><th>항목</th><th class="n" style="width:110px">${S.meta.year}년 수입결산</th><th class="n" style="width:120px">${ny}년 수입예산</th><th class="n" style="width:100px">증감</th><th style="width:190px">비고</th><th class="no-print no-ro" style="width:34px"></th></tr></thead><tbody>
+    <table class="wn"><thead><tr><th style="width:150px">항목</th><th class="n" style="width:110px">${S.meta.year}년 수입결산</th><th class="n" style="width:120px">${ny}년 수입예산</th><th class="n" style="width:100px">증감</th><th style="width:190px">비고</th><th class="no-print no-ro" style="width:34px"></th></tr></thead><tbody>
     ${incBody(s, nI, xI)}
     <tr class="tot"><td>총계</td><td class="n">${won(s.incT)}</td><td class="n">${won(incT)}</td><td class="n">${won(incT-s.incT)}</td><td></td><td class="no-print no-ro"></td></tr>
     </tbody></table>
