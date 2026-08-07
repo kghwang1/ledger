@@ -84,15 +84,30 @@ input.n{text-align:right;font-variant-numeric:tabular-nums}
 ol.steps{padding-left:18px;margin:0;font-size:13.2px}
 ol.steps li{margin-bottom:7px}
 ol.steps small{color:var(--mute);display:block}
-.form{display:grid;grid-template-columns:88px 1.4fr 132px 130px 1.4fr auto;gap:8px;align-items:end;background:#fafbfc;border:1px solid var(--line);padding:12px;border-radius:9px;margin-bottom:14px}
-.form label{font-size:11.5px;color:var(--mute);display:block;margin-bottom:3px;font-weight:600}
-@media(max-width:820px){ .form{grid-template-columns:1fr 1fr} }
+.form{background:#fafbfc;border:1px solid var(--line);padding:12px;border-radius:9px;margin-bottom:14px;
+  display:flex;flex-direction:column;gap:9px}
+.fr{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.fi{display:flex;align-items:center;gap:7px;flex:1 1 150px}
+.fi label{font-size:12.5px;color:var(--ink2);font-weight:600;white-space:nowrap;margin:0;flex:none}
+.fi.wide{flex:1 1 100%}
+.fi.narrow{flex:0 0 auto}
+.fi.narrow select{width:82px}
+@media(max-width:560px){ .fi{flex:1 1 100%} }
 .chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
 .chip{border:1px solid var(--line);background:#fff;border-radius:20px;padding:3px 12px;font-size:12px;cursor:pointer;color:var(--ink2)}
 .chip.on{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:600}
-.scroll{max-height:560px;overflow:auto;border:1px solid var(--line2);border-radius:8px}
+.scroll{max-height:560px;overflow:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--line2);border-radius:8px}
 .scroll table{font-size:12.5px}
 .scroll thead th{position:sticky;top:0;z-index:1}
+.swipe{display:none;font-size:11.5px;color:var(--mute);margin:6px 0 0}
+
+@media screen and (max-width:760px){
+  .swipe{display:block}
+  .card{overflow-x:auto}
+  table.lg{min-width:730px}          /* 출납부 — 항목 칸을 넉넉히 */
+  table.wt{min-width:560px}          /* 예산·결산·새해예산요구 */
+  .navr select{min-width:96px}
+}
 .sign{display:flex;gap:26px;justify-content:flex-end;margin-top:26px;font-size:12.5px;color:var(--ink2)}
 .sign div{border-top:1px solid var(--ink2);padding-top:5px;min-width:110px;text-align:center}
 .print-only{display:none}
@@ -114,6 +129,9 @@ ol.steps small{color:var(--mute);display:block}
   .col{width:100%!important;min-width:0!important;flex:none!important;margin:0 0 6mm}
   .scroll{max-height:none;overflow:visible;border:0;border-radius:0}
   table{width:100%;max-width:100%;font-size:9pt;border-collapse:collapse}
+  table.lg,table.wt{min-width:0!important}
+  .card{overflow:visible!important}
+  .swipe{display:none!important}
   .scroll table{font-size:8.6pt}
   th,td{padding:2px 4px;word-break:break-word;border-bottom:.4pt solid #bbb}
   th{background:#eee!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;font-size:8.4pt}
@@ -392,6 +410,7 @@ var QR = (function(){
 
 /* ───────── 상태 ───────── */
 const KEY = 'church_ledger_v1';
+const HOME_URL = 'https://kghwang1.github.io/ledger/';   // 프로그램이 올려진 주소 (배포 시 이 줄만 고치면 됩니다)
 const P = [
   {k:'DEC',label:'전년 12월', d:y=>`${y-1}년 12월 · 별도 정산`, m:[12], prev:true},
   {k:'Q1', label:'1분기', d:y=>`${y}년 1~3월`,   m:[1,2,3]},
@@ -426,6 +445,7 @@ function fresh(){
 function norm(s){
   s = Object.assign(fresh(), s||{});
   s.meta = Object.assign({year:2026,dept:'',church:'',url:''}, s.meta);
+  if(!String(s.meta.url||'').trim()) s.meta.url = HOME_URL;   // 배포 주소 기본값
   s.nextYear = Object.assign({expense:{},income:{},basis:{},extraExp:[],extraInc:[],dec:0,note:''}, s.nextYear);
   s.nextYear.extraExp = (s.nextYear.extraExp||[]).map(x=>({name:x.name||'',amt:+x.amt||0,basis:x.basis||''}));
   s.nextYear.extraInc = (s.nextYear.extraInc||[]).map(x=>({name:x.name||'',amt:+x.amt||0}));
@@ -717,14 +737,17 @@ function vGuide(){
     </div>
     <div class="col card" id="qrCard" style="flex:1;min-width:250px">
       <h2>프로그램 받기 QR</h2>
-      <p class="hint no-print">프로그램을 올려 둔 주소를 적으면 QR이 만들어집니다. 부서 담당자들이 찍어서 최신 버전을 받아 갑니다. <b>버전 ${APPVER}</b></p>
+      <p class="hint no-print">이 프로그램이 올려진 주소가 미리 들어 있습니다. 부서 담당자들이 QR을 찍어 최신 버전을 받아 갑니다. 주소를 옮기셨다면 아래 칸을 고치세요. <b>버전 ${APPVER}</b></p>
       <input type="text" data-meta="url" class="no-print" value="${esc(S.meta.url||'')}" placeholder="https://... 파일 주소">
       <div id="qrBox" style="text-align:center;margin-top:12px"></div>
       <div class="tools no-print" style="margin:10px 0 0;justify-content:center">
         <button class="btn g sm" id="qrHere">현재 주소 넣기</button>
         <button class="btn g sm" id="qrPng">QR 이미지 저장</button>
-        <button class="btn g sm" id="qrCopy">주소 복사</button>
+        <button class="btn g sm" id="qrMsg">안내문 복사</button>
+        <button class="btn g sm" id="qrCopy">주소만 복사</button>
+        <span id="qrShareWrap"></span>
       </div>
+      <p class="hint no-print" style="margin:8px 0 0">저장한 이미지 안에 주소 글자가 함께 들어갑니다. <b>안내문 복사</b> 후 카톡에 붙여넣으면 주소가 눌러지는 링크로 바뀝니다.</p>
     </div>
   </div>
 
@@ -785,7 +808,7 @@ function vBudget(){
     <div class="col card">
       <h2>수입 예산</h2>
       <p class="hint">첫 번째 항목(이월금)은 결산에서 12월 잔고가 자동으로 들어갑니다.</p>
-      <table><thead><tr><th>항목</th><th class="n" style="width:130px">수입액</th><th style="width:34px"></th></tr></thead><tbody>
+      <table class="wt"><thead><tr><th>항목</th><th class="n" style="width:130px">수입액</th><th style="width:34px"></th></tr></thead><tbody>
       ${S.incomeItems.map((it,i)=>`<tr>
         <td><input type="text" data-bi="${i}" data-f="name" value="${esc(it.name)}"></td>
         <td class="n"><input type="text" class="n" data-bi="${i}" data-f="budget" value="${won(it.budget)}"></td>
@@ -797,7 +820,7 @@ function vBudget(){
     <div class="col card">
       <h2>지출 예산</h2>
       <p class="hint">항목 앞에 번호를 붙이면(예: 1.겨울성경학교) 정렬이 쉽습니다.</p>
-      <table><thead><tr><th>항목</th><th class="n" style="width:120px">지출액</th><th style="width:150px">산출근거</th><th style="width:34px"></th></tr></thead><tbody>
+      <table class="wt"><thead><tr><th>항목</th><th class="n" style="width:120px">지출액</th><th style="width:150px">산출근거</th><th style="width:34px"></th></tr></thead><tbody>
       ${S.expenseItems.map((it,i)=>`<tr>
         <td><input type="text" data-be="${i}" data-f="name" value="${esc(it.name)}"></td>
         <td class="n"><input type="text" class="n" data-be="${i}" data-f="budget" value="${won(it.budget)}"></td>
@@ -839,7 +862,7 @@ function vLedger(){
   return `
   ${pHead(ptitle, psub)}
   <div class="chips no-print">
-    ${P.map(x=>`<button class="chip ${x.k===per?'on':''}" data-per="${x.k}">${x.label} · ${x.d(S.meta.year)}</button>`).join('')}
+    ${P.map(x=>`<button class="chip ${x.k===per?'on':''}" data-per="${x.k}" title="${x.d(S.meta.year)}">${x.label}</button>`).join('')}
   </div>
 
   <div class="card">
@@ -847,12 +870,16 @@ function vLedger(){
     ${p.prev?`<div class="note no-print"><b>${S.meta.year-1}년 12월은 별도 정산입니다.</b> 작년 결산에서 가결산으로 잡아 두었던 12월을 실제 집행한 내역이며, ${S.meta.year}년 결산(1~12월)에는 포함되지 않고 따로 보고합니다. 여기서 나온 잔고가 ${S.meta.year}년 이월금이 됩니다.</div>`:''}
 
     <div class="form no-print no-ro">
-      <div><label>관</label><select id="fType"><option ${ed&&ed.type==='지출'?'':'selected'}>수입</option><option ${ed&&ed.type==='지출'?'selected':''}>지출</option></select></div>
-      <div><label>항</label><select id="fCat"></select></div>
-      <div><label>날짜</label><input type="date" id="fDate" value="${ed?ed.date:defDate(p)}"></div>
-      <div><label>금액</label><input type="text" class="n" id="fAmt" value="${ed?won(ed.amount):''}" placeholder="0"></div>
-      <div><label>산출근거 / 비고</label><input type="text" id="fNote" value="${ed?esc(ed.note):''}" placeholder="예: 12월 생일간식"></div>
-      <div style="display:flex;gap:6px">
+      <div class="fr">
+        <div class="fi narrow"><label>관</label>
+          <select id="fType"><option ${ed&&ed.type==='지출'?'':'selected'}>수입</option><option ${ed&&ed.type==='지출'?'selected':''}>지출</option></select></div>
+        <div class="fi" style="flex:2 1 200px"><label>항</label><select id="fCat"></select></div>
+        <div class="fi" style="flex:1 1 160px"><label>날짜</label><input type="date" id="fDate" value="${ed?ed.date:defDate(p)}"></div>
+        <div class="fi" style="flex:1 1 140px"><label>금액</label><input type="text" class="n" id="fAmt" value="${ed?won(ed.amount):''}" placeholder="0"></div>
+      </div>
+      <div class="fr">
+        <div class="fi wide" style="flex:1 1 auto"><label>산출근거</label>
+          <input type="text" id="fNote" value="${ed?esc(ed.note):''}" placeholder="예: 12월 생일간식"></div>
         <button class="btn" id="fAdd">${ed?'수정':'추가'}</button>
         ${ed?`<button class="btn g" id="fCancel">취소</button>`:''}
       </div>
@@ -869,10 +896,10 @@ function vLedger(){
 
     <div class="row">
       <div class="col" style="flex:3;min-width:420px">
-        <div class="scroll"><table>
-          <thead><tr><th style="width:52px">관</th><th>항</th><th style="width:96px">날짜</th><th class="n" style="width:104px">금액</th><th>산출근거</th><th class="n" style="width:108px">잔액</th><th class="no-print" style="width:64px"></th></tr></thead>
+        <div class="scroll"><table class="lg">
+          <thead><tr><th style="width:52px">관</th><th style="width:200px">항</th><th style="width:86px">날짜</th><th class="n" style="width:104px">금액</th><th style="width:160px">산출근거</th><th class="n" style="width:108px">잔액</th><th class="no-print no-ro" style="width:64px"></th></tr></thead>
           <tbody>
-            <tr class="sub"><td></td><td>${per==='DEC'?`${S.meta.year-1}년 11월 말 잔고`:per==='Q1'?`${S.meta.year}년 이월금 (전년 12월 정산 잔고)`:'전 분기 잔고'}</td><td></td>
+            <tr class="sub"><td></td><td>${per==='DEC'?`${S.meta.year-1}년 11월 말 잔고`:per==='Q1'?'이월금':'전 분기 잔고'}</td><td></td>
               <td class="n">${won(opening(per))}</td><td></td><td class="n">${won(opening(per))}</td><td class="no-print"></td></tr>
             ${rows.map(({e,bal})=>`<tr data-row="${e.id}">
               <td><span class="badge ${e.type==='수입'?'b-in':'b-out'}">${e.type}</span></td>
@@ -884,7 +911,7 @@ function vLedger(){
               <td class="c no-print no-ro"><button class="btn g sm" data-ed="${e.id}">✎</button> <button class="btn dg sm" data-rm="${e.id}">×</button></td></tr>`).join('')}
             <tr class="tot"><td colspan="3">${p.label} 잔고</td><td class="n">${won(net(per))}</td><td></td><td class="n">${won(closing(per))}</td><td class="no-print"></td></tr>
           </tbody></table></div>
-        ${rows.length===0?'<p class="hint" style="margin-top:10px">아직 기록이 없습니다. 위 입력창에서 추가하세요.</p>':''}
+        ${rows.length===0?'<p class="hint" style="margin-top:10px">아직 기록이 없습니다. 위 입력창에서 추가하세요.</p>':'<p class="swipe">← 표를 옆으로 밀면 산출근거와 잔액을 볼 수 있습니다 →</p>'}
       </div>
 
       <div class="col" style="flex:2;min-width:280px">
@@ -947,7 +974,7 @@ function vSettle(){
     <div class="row">
       <div class="col">
         <h2 style="font-size:14px">수입 결산</h2>
-        <table><thead><tr><th>항목</th><th class="n">예산</th><th class="n">수입</th><th class="n">증감</th></tr></thead><tbody>
+        <table class="wt"><thead><tr><th>항목</th><th class="n">예산</th><th class="n">수입</th><th class="n">증감</th></tr></thead><tbody>
         ${s.inc.map((x,i)=>`<tr><td>${esc(x.name)}${i===0?` <span class="hint" style="display:inline">(${S.meta.year-1}년 12월 정산 잔고)</span>`:''}</td>
           <td class="n">${won(x.budget)}</td><td class="n">${won(x.actual)}</td>
           <td class="n ${x.actual-x.budget<0?'out':''}">${won(x.actual-x.budget)}</td></tr>`).join('')}
@@ -956,7 +983,7 @@ function vSettle(){
       </div>
       <div class="col">
         <h2 style="font-size:14px">지출 결산</h2>
-        <table><thead><tr><th>항목</th><th class="n">예산</th><th class="n">지출</th><th class="n">증감</th></tr></thead><tbody>
+        <table class="wt"><thead><tr><th>항목</th><th class="n">예산</th><th class="n">지출</th><th class="n">증감</th></tr></thead><tbody>
         ${s.exp.map(x=>`<tr><td>${esc(x.name)}</td><td class="n">${won(x.budget)}</td><td class="n">${won(x.actual)}</td>
           <td class="n ${x.actual-x.budget>0?'out':''}">${won(x.actual-x.budget)}</td></tr>`).join('')}
         <tr class="tot"><td>소계</td><td class="n">${won(s.expB)}</td><td class="n">${won(s.expT)}</td><td class="n">${won(s.expT-s.expB)}</td></tr>
@@ -1024,7 +1051,7 @@ function vNext(){
 
   <div class="card">
     <h2>${ny}년 지출 계획</h2>
-    <table><thead><tr><th>항목</th><th class="n" style="width:110px">${S.meta.year}년 지출결산</th><th class="n" style="width:120px">${ny}년 지출예산</th><th class="n" style="width:100px">증감</th><th style="width:190px">산출 내역</th><th class="no-print no-ro" style="width:34px"></th></tr></thead><tbody>
+    <table class="wt"><thead><tr><th>항목</th><th class="n" style="width:110px">${S.meta.year}년 지출결산</th><th class="n" style="width:120px">${ny}년 지출예산</th><th class="n" style="width:100px">증감</th><th style="width:190px">산출 내역</th><th class="no-print no-ro" style="width:34px"></th></tr></thead><tbody>
     ${S.expenseItems.map((it,i)=>{const v=+nE[it.name]||0;return `<tr>
       <td>${esc(it.name)}</td><td class="n">${won(s.exp[i].actual)}</td>
       <td class="n"><input type="text" class="n" data-ny="e" data-key="${esc(it.name)}" value="${v?won(v):''}"></td>
@@ -1046,7 +1073,7 @@ function vNext(){
 
   <div class="card">
     <h2>${ny}년 수입 계획</h2>
-    <table><thead><tr><th>항목</th><th class="n" style="width:110px">${S.meta.year}년 수입결산</th><th class="n" style="width:120px">${ny}년 수입예산</th><th class="n" style="width:100px">증감</th><th style="width:190px">비고</th><th class="no-print no-ro" style="width:34px"></th></tr></thead><tbody>
+    <table class="wt"><thead><tr><th>항목</th><th class="n" style="width:110px">${S.meta.year}년 수입결산</th><th class="n" style="width:120px">${ny}년 수입예산</th><th class="n" style="width:100px">증감</th><th style="width:190px">비고</th><th class="no-print no-ro" style="width:34px"></th></tr></thead><tbody>
     ${incBody(s, nI, xI)}
     <tr class="tot"><td>총계</td><td class="n">${won(s.incT)}</td><td class="n">${won(incT)}</td><td class="n">${won(incT-s.incT)}</td><td></td><td class="no-print no-ro"></td></tr>
     </tbody></table>
@@ -1162,16 +1189,71 @@ function drawQR(){
       <path d="${d}" fill="#111"/></svg>
     <div class="hint" style="margin:6px 0 0;word-break:break-all">${esc(S.meta.url)}</div>`;
 }
-function savePNG(){
+function qrCanvas(){
   const m=qrMatrix();
-  if(!m || m==='ERR'){ alert('먼저 올바른 주소를 입력하세요.'); return }
-  const n=m.length, q=4, t=n+q*2, px=10;
-  const c=document.createElement('canvas'); c.width=c.height=t*px;
+  if(!m || m==='ERR') return null;
+  const url=(S.meta.url||'').trim();
+  const n=m.length, q=4, px=10, qw=(n+q*2)*px, pad=28;
+  const W=Math.max(qw+pad*2, 400);
+  const title=`${S.meta.year}년 ${deptName()||'부서'} 회계장부`;
+  const mc=document.createElement('canvas').getContext('2d');
+  mc.font='600 16px sans-serif';
+  const maxW=W-pad*2, lines=[]; let cur='';
+  for(const ch of url){
+    if(mc.measureText(cur+ch).width>maxW && cur){ lines.push(cur); cur=ch }
+    else cur+=ch;
+  }
+  if(cur) lines.push(cur);
+  const H = pad + 30 + qw + 18 + lines.length*22 + 16 + pad;
+  const c=document.createElement('canvas'); c.width=W; c.height=H;
   const g=c.getContext('2d');
-  g.fillStyle='#fff'; g.fillRect(0,0,c.width,c.height);
-  g.fillStyle='#000';
-  for(let y=0;y<n;y++) for(let x=0;x<n;x++) if(m[y][x]) g.fillRect((x+q)*px,(y+q)*px,px,px);
-  c.toBlob(b=>dl(b, `${S.meta.year}년_${S.meta.dept||'부서'}_QR.png`));
+  g.fillStyle='#fff'; g.fillRect(0,0,W,H);
+  g.textAlign='center';
+  g.fillStyle='#1c2333'; g.font='700 20px sans-serif';
+  g.fillText(title, W/2, pad+20);
+  const ox=(W-qw)/2, oy=pad+30;
+  g.fillStyle='#111';
+  for(let y=0;y<n;y++) for(let x=0;x<n;x++) if(m[y][x]) g.fillRect(ox+(x+q)*px, oy+(y+q)*px, px, px);
+  g.fillStyle='#2f5d50'; g.font='600 16px sans-serif';
+  lines.forEach((ln,i)=>g.fillText(ln, W/2, oy+qw+34+i*22));
+  g.fillStyle='#8792a8'; g.font='13px sans-serif';
+  g.fillText(`QR을 찍거나 위 주소로 접속하세요 · 버전 ${APPVER}`, W/2, H-pad+2);
+  return c;
+}
+function savePNG(){
+  const c=qrCanvas();
+  if(!c){ alert('먼저 올바른 주소를 입력하세요.'); return }
+  c.toBlob(b=>dl(b, `${deptName()||'부서'}_회계장부_QR.png`));
+}
+function shareMsg(){
+  return `${S.meta.year}년 교회 부서 회계장부 프로그램입니다.\n아래 주소로 접속해 사용하세요.\n${(S.meta.url||'').trim()}\n(버전 ${APPVER})`;
+}
+function copyText(t, msg){
+  const ok=()=>{ srvMsg=msg; render() };
+  try{
+    if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(t).then(ok, fallback); return }
+  }catch(e){}
+  fallback();
+  function fallback(){
+    try{
+      const ta=document.createElement('textarea');
+      ta.value=t; ta.style.position='fixed'; ta.style.opacity='0';
+      document.body.appendChild(ta); ta.select();
+      document.execCommand('copy'); document.body.removeChild(ta); ok();
+    }catch(e){ alert(t) }
+  }
+}
+async function shareQR(){
+  const c=qrCanvas();
+  if(!c){ alert('먼저 올바른 주소를 입력하세요.'); return }
+  c.toBlob(async b=>{
+    const f=new File([b], `회계장부_QR.png`, {type:'image/png'});
+    try{
+      if(navigator.canShare && navigator.canShare({files:[f]}))
+        await navigator.share({files:[f], text:shareMsg()});
+      else await navigator.share({text:shareMsg(), url:(S.meta.url||'').trim()});
+    }catch(e){}
+  });
 }
 
 function bind(){
@@ -1260,12 +1342,20 @@ function bind(){
     S.meta.url=u; save(); render();
   };
   if($('#qrPng')) $('#qrPng').onclick=()=>savePNG();
+  if($('#qrMsg')) $('#qrMsg').onclick=()=>{
+    if(!(S.meta.url||'').trim()){ alert('먼저 주소를 입력하세요.'); return }
+    copyText(shareMsg(), '안내문을 복사했습니다. 카톡에 붙여넣으세요.');
+  };
   if($('#qrCopy')) $('#qrCopy').onclick=()=>{
     const u=(S.meta.url||'').trim();
     if(!u){ alert('먼저 주소를 입력하세요.'); return }
-    try{ navigator.clipboard.writeText(u); srvMsg='주소를 복사했습니다.'; render() }
-    catch(e){ alert(u) }
+    copyText(u, '주소를 복사했습니다.');
   };
+  const sw=$('#qrShareWrap');
+  if(sw && navigator.share){
+    sw.innerHTML='<button class="btn g sm" id="qrShare">이미지 공유</button>';
+    $('#qrShare').onclick=shareQR;
+  }
   const bm=$('#backMine'); if(bm) bm.onclick=()=>{ if(ro){ S=mine||S; ro=false; mine=null; roName=''; srvMsg=''; tab='guide'; render() } };
 
   on('[data-xe]','change',e=>{ const i=+e.target.dataset.xe, f=e.target.dataset.f;
