@@ -512,7 +512,7 @@ function setStatus(t){ const el=document.getElementById('hSt'); if(el) el.textCo
 window.addEventListener('beforeunload', e=>{ if(dirty){ e.preventDefault(); e.returnValue='' } });
 
 /* ───────── 서버(공유) 저장 ───────── */
-const APPVER = '2026.25';
+const APPVER = '2026.26';
 const LIBKEY = 'church_ledger_lib_v1';
 const DATASHEET = '_data', DATATAG = 'CHURCH_LEDGER_V1';
 const XLSXMIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -520,6 +520,7 @@ let LIB = {};                                       // 다른 부서 파일 보�
 /* ▼▼▼ 서버 설정 — 총무님이 앱스 스크립트를 배포한 뒤 이 두 줄만 고치시면 됩니다 ▼▼▼ */
 const SERVER_URL = 'https://script.google.com/macros/s/AKfycbz5LnhYK4HMP8aDYKHNaTOae35gdO20yK-cdWlQPyX4N6AMBBrzMU7c8iCU_In3v8Cnjw/exec';
 const SERVER_KEY = 'church2026';                    // 앱스 스크립트의 PASSWORD 와 같은 값
+const VIEW_PW    = 'SD';                            // 다른 부서 자료 열람 암호
 /* ▲▲▲ 여기까지 ▲▲▲ */
 function serverUrl(){ return String((S.meta&&S.meta.server)||SERVER_URL||'').trim() }
 function serverKey(){ return String((S.meta&&S.meta.serverKey)||SERVER_KEY||'') }
@@ -809,7 +810,8 @@ function render(){
   document.getElementById('hSub').textContent = S.meta.church || '';
 
   document.getElementById('nav').innerHTML =
-    TABS.map(([k,l])=>`<button data-tab="${k}" class="${tab===k?'on':''}">${l}</button>`).join('')
+    TABS.filter(([k])=>!(k==='data' && (guideMode==='view'||ro)))
+        .map(([k,l])=>`<button data-tab="${k}" class="${tab===k?'on':''}">${l}</button>`).join('')
     + `<div class="navr">${(ro||guideMode==='view')?'':'<button id="navSave" class="nsave">저장</button>'}
        <input type="file" id="deptFiles" multiple accept=".xlsx,.csv,.txt,.json" style="display:none">
        <input type="file" id="myFile" accept=".xlsx,.csv,.txt,.json" style="display:none"></div>`;
@@ -858,7 +860,7 @@ function viewList(){
   if(!serverOn()) return `<p class="hint">서버 주소가 설정되어 있지 않습니다.</p>`;
   if(!srv.length)  return `<p class="hint">서버에 저장된 자료가 없습니다.</p>
     <button class="btn g sm" id="vRefresh" style="margin-top:8px">목록 새로고침</button>`;
-  return `<p class="hint">읽을 파일을 하나 고르세요. 고른 자료는 보기만 되고 고칠 수 없습니다.</p>
+  return `<p class="hint">읽을 파일을 하나 고르세요.</p>
     <div class="vlist">
       ${srv.map(x=>{
         const on = ro && roName===x.name && S.meta.year===x.year;
@@ -933,6 +935,7 @@ function vGuide(){
     <div class="col card">
       <h2>사용 순서</h2>
       <ol class="steps">
+        <li>열람 전용으로 쓰실 때는 <b>기본 정보</b> 옆 <b>열람</b>을 누르고 암호 <b>SD</b>를 입력합니다.<small>다른 부서 자료를 보기만 할 수 있습니다. 내 부서 기록은 아래 순서대로 하세요.</small></li>
         <li><b>예산 탭</b>에 수입·지출 항목과 금액을 입력합니다.<small>여기 적은 항목 이름이 출납부의 선택 메뉴가 됩니다. 한 번 정한 이름은 결산까지 바꾸지 마세요.</small></li>
         <li><b>출납부 › 전년 12월</b>에 ${S.meta.year-1}년 12월 실제 지출을 통장 기준으로 기록합니다.<small>작년 결산 때 가결산으로 잡아 두었던 12월을 실제로 집행한 내역입니다. ${S.meta.year}년 결산과는 별개로 정산·보고하며, 이 잔고가 ${S.meta.year}년 이월금이 됩니다.</small></li>
         <li><b>1분기(1~3월)</b>부터 <b>4분기</b>까지 순서대로 기록합니다.<small>11월까지 실제 사용을 기록하면 됩니다.</small></li>
@@ -1396,8 +1399,6 @@ function vData(){
     </div>
   </div>
 
-  ${browseCard()}
-
   <div class="card">
     <h2>새 회계연도 시작</h2>
     <p class="hint">결산이 끝난 뒤 사용하세요. ${S.meta.year+1}년 장부를 만들고, 새해예산요구에 입력한 금액을 예산으로 옮깁니다. 가결산으로 잡아 둔 ${S.meta.year}년 12월은 새 장부의 <b>전년 12월</b> 탭에 실제 지출을 기록해 별도 보고합니다.</p>
@@ -1618,6 +1619,9 @@ function bind(){
     guideMode='edit'; srvMsg=''; render();
   };
   if($('#gmView')) $('#gmView').onclick=async()=>{
+    const pw = prompt('열람 암호를 입력하세요.');
+    if(pw===null) return;                                   // 취소
+    if(String(pw).trim().toUpperCase() !== VIEW_PW){ alert('암호가 맞지 않습니다.'); return }
     guideMode='view'; openStep=0; render();
     if(serverOn()){ await loadDeptList(); render() }
   };
