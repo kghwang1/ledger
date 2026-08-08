@@ -23,7 +23,12 @@ body{
 header{background:var(--accent);color:#fff;padding:14px 0 0}
 header .wrap{padding-bottom:0}
 .hd{display:flex;align-items:baseline;gap:12px;flex-wrap:nowrap;padding-bottom:2px}
-header h1{font-size:19px;margin:0 0 10px;font-weight:700;letter-spacing:-.02em}
+header h1{font-size:19px;margin:0;font-weight:700;letter-spacing:-.02em}
+.ttl{display:flex;align-items:center;gap:12px;margin:0 0 10px}
+.ttl #hSave{margin-left:auto;flex-shrink:0}
+.ttl button.nsave{padding:6px 20px;border-radius:7px;background:#fff;color:var(--accent);
+  font-size:13.5px;font-weight:700;border:0;cursor:pointer}
+.ttl button.nsave:hover{background:#eef3f1}
 .hd .sub{font-size:13px;opacity:.9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .hd .st{margin-left:auto;font-size:12px;opacity:.8;white-space:nowrap;flex-shrink:0}
 nav{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none}
@@ -35,13 +40,6 @@ nav button{
 }
 nav button:hover{opacity:1;background:rgba(255,255,255,.1)}
 nav button.on{opacity:1;background:var(--bg);color:var(--accent)}
-.navr{margin-left:auto;display:flex;align-items:center;gap:6px;padding:0 0 6px 10px;flex-shrink:0}
-.navr button.nsave{padding:6px 20px;border-radius:7px;background:#fff;color:var(--accent);
-  opacity:1;font-size:13.5px;font-weight:700;border:0}
-.navr button.nsave:hover{background:#eef3f1}
-.navr button.nsave.alt{background:rgba(255,255,255,.2);color:#fff;box-shadow:inset 0 0 0 1px rgba(255,255,255,.55)}
-.navr button.nsave.alt.on{background:var(--bg);color:var(--accent);box-shadow:none}
-.navr button.nsave.alt:hover{background:rgba(255,255,255,.34)}
 .robar{background:var(--warn-bg);border:1px solid #f0dcb8;color:#7a4f13;border-radius:var(--r);
   padding:10px 14px;margin-bottom:14px;font-size:13px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 tr.hl td{background:#fff4c9!important;transition:background 1.6s}
@@ -125,6 +123,9 @@ ol.steps small{color:var(--mute);display:block}
 .vrow:last-child{border-bottom:0}
 .vrow.on{background:var(--accent-l)}
 .vrow.hov{background:#f5f7f9}
+.vrow.dim{color:#b3bac6}
+.vrow.dim .hint{color:#c6ccd6}
+.vrow.dim .vname{cursor:default}
 .vname{cursor:pointer}
 .vinfo{background:var(--accent-l);border:1px solid #cfe6da;border-radius:9px;padding:12px 14px;margin-bottom:14px}
 .vinfo .kv{border-bottom:1px dashed #bfd9ce;padding:4px 0}
@@ -148,7 +149,6 @@ ol.steps small{color:var(--mute);display:block}
   table.ws{min-width:290px}          /* 현재 상황 */
   table.we{min-width:400px}          /* 결산 (수입·지출 같은 폭) */
   table.wi2{min-width:200px}         /* 수입 계획 */
-  .navr select{min-width:96px}
 }
 .sign{display:flex;gap:26px;justify-content:flex-end;margin-top:26px;font-size:12.5px;color:var(--ink2)}
 .sign div{border-top:1px solid var(--ink2);padding-top:5px;min-width:110px;text-align:center}
@@ -204,7 +204,12 @@ ol.steps small{color:var(--mute);display:block}
       <span class="sub" id="hSub"></span>
       <span class="st" id="hSt"></span>
     </div>
-    <h1 id="hTitle">부서 회계장부</h1>
+    <div class="ttl">
+      <h1 id="hTitle">부서 회계장부</h1>
+      <span id="hSave"></span>
+      <input type="file" id="deptFiles" multiple accept=".xlsx,.csv,.txt,.json" style="display:none">
+      <input type="file" id="myFile" accept=".xlsx,.csv,.txt,.json" style="display:none">
+    </div>
     <nav id="nav"></nav>
   </div>
 </header>
@@ -536,7 +541,7 @@ function setStatus(t){ const el=document.getElementById('hSt'); if(el) el.textCo
 window.addEventListener('beforeunload', e=>{ if(dirty){ e.preventDefault(); e.returnValue='' } });
 
 /* ───────── 서버(공유) 저장 ───────── */
-const APPVER = '2026.32';
+const APPVER = '2026.35';
 const LIBKEY = 'church_ledger_lib_v1';
 const DATASHEET = '_data', DATATAG = 'CHURCH_LEDGER_V1';
 const XLSXMIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -851,17 +856,22 @@ function render(){
   document.getElementById('nav').innerHTML =
     TABS.filter(([k])=>!(k==='data' && (guideMode==='view'||ro)))
         .map(([k,l])=>`<button data-tab="${k}" class="${tab===k?'on':''}">${l}</button>`).join('')
-    + `<div class="navr">${(ro||guideMode==='view')?'':'<button id="navSave" class="nsave">저장</button>'}
-       <input type="file" id="deptFiles" multiple accept=".xlsx,.csv,.txt,.json" style="display:none">
-       <input type="file" id="myFile" accept=".xlsx,.csv,.txt,.json" style="display:none"></div>`;
+    ;
+  document.getElementById('hSave').innerHTML =
+    (ro||guideMode==='view') ? '' : '<button id="navSave" class="nsave">저장</button>';
 
   const upd = newVer ? `<div class="robar no-print" style="background:#e8f0ed;border-color:#cfe6da;color:#26493f">
       <b>새 버전 ${esc(newVer)}이 나왔습니다.</b>
       <span>지금 쓰시는 것은 ${APPVER} 입니다. 기록해 두신 내용은 그대로 남습니다.</span>
       <button class="btn sm" id="doUpd" style="margin-left:auto">새 버전으로 바꾸기</button></div>` : '';
-  const banner = ro ? `<div class="robar no-print"><b>읽기 전용</b>
-      <span>${esc(roName)} 부서 자료를 열람 중입니다. 내용을 고칠 수 없습니다.</span>
-      <button class="btn g sm" id="backMine" style="margin-left:auto">내 부서로 돌아가기</button></div>`
+  const banner = (ro || guideMode==='view')
+    ? `<div class="robar no-print" style="display:block">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <b>읽기 전용</b>
+          <button class="btn g sm" id="backMine">내 부서로 돌아가기</button>
+        </div>
+        <div style="margin-top:5px">${ro?`${esc(roName)} 부서의 자료를 열람중입니다.`:'읽을 파일을 선택하세요.'}</div>
+      </div>`
     : (srvMsg? `<div class="robar no-print" style="background:var(--in-bg);border-color:#cfe6da;color:#1d6b4f">${esc(srvMsg)}</div>`:'');
 
   document.getElementById('view').innerHTML = upd + banner +
@@ -937,8 +947,9 @@ function viewList(){
         ${srv.map(x=>{
           const key = x.name+'|'+x.year;
           const on = ro && roName===x.name && S.meta.year===x.year;
-          return `<div class="vrow ${on?'on':''} ${prevKey===key&&!on?'hov':''}">
-            <input type="checkbox" data-vfile="${esc(key)}" ${on?'checked':''}>
+          const dim = ro && !on;
+          return `<div class="vrow ${on?'on':''} ${dim?'dim':''} ${!ro&&prevKey===key?'hov':''}">
+            <input type="checkbox" data-vfile="${esc(key)}" ${on?'checked':''} ${dim?'disabled':''}>
             <b class="vname" data-prev="${esc(key)}">${esc(x.name)}_${x.year}</b>
             <span class="hint" style="margin:0 0 0 auto">${x.at?new Date(x.at).toLocaleDateString('ko-KR'):'-'}</span>
           </div>`;
@@ -981,9 +992,11 @@ function vGuide(){
   <div class="row">
     <div class="col card" style="flex:2;min-width:340px">
       <h2>기본 정보
-        <span class="seg no-print">
-          <button class="${guideMode==='edit'?'on':''}" id="gmEdit">작성</button><button class="${guideMode==='view'?'on':''}" id="gmView">열람</button>
-        </span></h2>
+        ${guideMode==='view'
+          ? `<span class="seg no-print"><button class="on">열람</button></span>`
+          : `<span class="seg no-print">
+               <button class="on" id="gmEdit">작성</button><button id="gmView">열람</button>
+             </span>`}</h2>
       ${guideMode==='view' ? viewList() : `
       <p class="hint">회계기간은 ${S.meta.year}.1.1 ~ ${S.meta.year}.12.31 입니다.</p>
       <div class="row">
@@ -1779,10 +1792,6 @@ function bind(){
     if(!u){ alert('먼저 주소를 입력하세요.'); return }
     copyText(u, '주소를 복사했습니다.');
   };
-  if($('#gmEdit')) $('#gmEdit').onclick=()=>{
-    if(ro){ S = mine || S; ro=false; mine=null; roName=''; }
-    guideMode='edit'; prevKey=''; srvMsg=''; render();
-  };
   if($('#gmView')) $('#gmView').onclick=async()=>{
     const pw = prompt('열람 암호를 입력하세요.');
     if(pw===null) return;                                   // 취소
@@ -1815,7 +1824,10 @@ function bind(){
   if($('#openGo')) $('#openGo').onclick=doOpenLoad;
   if($('#openName')) $('#openName').onkeydown=ev=>{ if(ev.key==='Enter') doOpenLoad() };
   const du=$('#doUpd'); if(du) du.onclick=applyUpdate;
-  const bm=$('#backMine'); if(bm) bm.onclick=()=>{ if(ro){ S=mine||S; ro=false; mine=null; roName=''; srvMsg=''; guideMode='edit'; tab='guide'; render() } };
+  const bm=$('#backMine'); if(bm) bm.onclick=()=>{
+    if(ro){ S=mine||S; ro=false; mine=null; roName=''; }
+    srvMsg=''; guideMode='edit'; prevKey=''; tab='guide'; render();
+  };
 
   on('[data-xe]','change',e=>{ const i=+e.target.dataset.xe, f=e.target.dataset.f;
     S.nextYear.extraExp[i][f] = f==='amt'? num(e.target.value) : e.target.value; save(); render() });
