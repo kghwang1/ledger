@@ -488,6 +488,7 @@ let guideMode='edit';            // 안내 페이지 · 작성 / 열람
 let prevKey='', prevCache={};    // 열람 · 파일에 마우스를 올렸을 때 미리 보여 줄 기본 정보
 let formImg='';                  // 입력 중인 증빙 사진
 let draft=null;                  // 화면을 다시 그려도 입력 중인 값이 사라지지 않게
+let formOpen=true, focusType=false;   // 추가한 뒤에는 입력창을 접고 결과를 보여 준다
 let quotaWarned=false;
 
 function uid(){ return Math.random().toString(36).slice(2,9) }
@@ -541,7 +542,7 @@ function setStatus(t){ const el=document.getElementById('hSt'); if(el) el.textCo
 window.addEventListener('beforeunload', e=>{ if(dirty){ e.preventDefault(); e.returnValue='' } });
 
 /* ───────── 서버(공유) 저장 ───────── */
-const APPVER = '2026.36';
+const APPVER = '2026.37';
 const LIBKEY = 'church_ledger_lib_v1';
 const DATASHEET = '_data', DATATAG = 'CHURCH_LEDGER_V1';
 const XLSXMIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -881,10 +882,11 @@ function render(){
     if(k==='ledger' && tab!=='ledger'){                 // 출납부를 열면 오늘 날짜의 분기·달로
       const t=todayPeriod();
       if(t){ per=t.k; mfil=t.m } 
-      editId=null;
+      editId=null; formOpen=true;
     }
     tab=k; render(); window.scrollTo(0,0);
   });
+  if($('#fMore')) $('#fMore').onclick=()=>{ formOpen=true; focusType=true; render() };
   const nsv = document.getElementById('navSave');
   if(nsv) nsv.onclick = ()=>{ serverOn()? srvSave() : saveFile() };
   document.getElementById('deptFiles').onchange = e=>{ openDeptFiles(e.target.files); e.target.value='' };
@@ -895,6 +897,11 @@ function render(){
     document.querySelectorAll('#view input,#view select,#view textarea')
       .forEach(el=>{ if(!el.hasAttribute('data-vfile')) el.disabled=true });   // 열람 목록은 계속 고를 수 있게
     document.querySelectorAll('#view .no-ro').forEach(el=>el.style.display='none');
+  }
+  if(focusType){
+    focusType=false;
+    const ft=document.getElementById('fType');
+    if(ft){ try{ ft.scrollIntoView({block:'center'}) }catch(e){} ft.focus() }
   }
   if(lastAdd){                              // 방금 입력한 줄이 보이도록 이동 + 강조
     const tr = document.querySelector(`tr[data-row="${lastAdd}"]`);
@@ -1230,7 +1237,10 @@ function vLedger(){
     <h2 class="no-print">${p.prev?`${String(S.meta.year-1).slice(2)}년 12월 수입 및 지출 내역`:`${pLabel(p)} 수입 및 지출 내역 <span class="hint" style="display:inline">${p.d(S.meta.year)}</span>`}</h2>
     ${p.prev?`<div class="note no-print">작년 결산에서 가결산으로 잡아 두었던 12월을 실제 집행한 내역이며, ${S.meta.year}년 결산(1~12월)에는 포함되지 않고 따로 보고합니다.</div>`:''}
 
-    <div class="form no-print no-ro">
+    ${formOpen?'':`<div class="tools no-print no-ro" style="margin-bottom:12px">
+      <button class="btn" id="fMore">＋ 계속 입력</button>
+      <span class="hint" style="margin:0">방금 넣은 내용이 아래에 표시됩니다.</span></div>`}
+    <div class="form no-print no-ro" ${formOpen?'':'style="display:none"'}>
       <div class="fr">
         <div class="fi narrow"><label>관</label>
           <select id="fType"><option ${(ed?ed.type:dr?dr.type:'수입')==='지출'?'':'selected'}>수입</option><option ${(ed?ed.type:dr?dr.type:'수입')==='지출'?'selected':''}>지출</option></select></div>
@@ -1714,13 +1724,13 @@ function bind(){
     if(used(S.expenseItems[i].name) && !confirm('이 항목으로 기록된 거래가 있습니다. 그래도 삭제할까요?')) return;
     S.expenseItems.splice(i,1); save(); render() });
 
-  on('[data-per]','click',e=>{ per=e.target.dataset.per; mfil=0; editId=null; formImg=''; draft=null; render() });
+  on('[data-per]','click',e=>{ per=e.target.dataset.per; mfil=0; editId=null; formImg=''; draft=null; formOpen=true; render() });
   on('[data-mf]','click',e=>{ mfil=+e.target.dataset.mf; render() });
   if($('#tgSort')) $('#tgSort').onclick=()=>{ sortDate=!sortDate; render() };
   on('[data-rm]','click',e=>{ const id=e.target.dataset.rm;
     if(!confirm('이 거래를 삭제할까요?')) return;
     S.entries[per]=ents(per).filter(x=>x.id!==id); if(editId===id) editId=null; save(); render() });
-  on('[data-ed]','click',e=>{ editId=e.target.dataset.ed; draft=null;
+  on('[data-ed]','click',e=>{ editId=e.target.dataset.ed; draft=null; formOpen=true;
     const t=ents(per).find(x=>x.id===editId); formImg = t&&t.img ? t.img : '';
     render(); const el=$('#fAmt'); if(el) el.focus() });
   on('[data-img]','click',e=>{ const t=ents(per).find(x=>x.id===e.target.dataset.img); if(t&&t.img) showImg(t.img) });
@@ -1760,8 +1770,9 @@ function bind(){
       formImg=''; draft=null;
       if(tgt !== per){ per = tgt; mfil = 0; }                      // 맞는 기간으로 이동
       else if(mfil && +iso.slice(5,7)!==mfil) mfil=0;              // 걸러져 안 보이면 필터 해제
+      formOpen=false;                                             // 입력창을 접어 결과가 보이게
+      try{ if(document.activeElement && document.activeElement.blur) document.activeElement.blur() }catch(e){}
       save(); render();
-      const a=$('#fAmt'); if(a) a.focus();
     };
     $('#fAdd').onclick=add;
     ['fAmt','fNote','fDate'].forEach(id=>{ const el=$('#'+id); if(el) el.onkeydown=ev=>{ if(ev.key==='Enter') add() } });
