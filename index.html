@@ -40,6 +40,7 @@ nav button.on{opacity:1;background:var(--bg);color:var(--accent)}
   opacity:1;font-size:13.5px;font-weight:700;border:0}
 .navr button.nsave:hover{background:#eef3f1}
 .navr button.nsave.alt{background:rgba(255,255,255,.2);color:#fff;box-shadow:inset 0 0 0 1px rgba(255,255,255,.55)}
+.navr button.nsave.alt.on{background:var(--bg);color:var(--accent);box-shadow:none}
 .navr button.nsave.alt:hover{background:rgba(255,255,255,.34)}
 .robar{background:var(--warn-bg);border:1px solid #f0dcb8;color:#7a4f13;border-radius:var(--r);
   padding:10px 14px;margin-bottom:14px;font-size:13px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
@@ -113,6 +114,17 @@ ol.steps small{color:var(--mute);display:block}
 .scroll thead th{position:sticky;top:0;z-index:1}
 .swipe{display:none;font-size:11.5px;color:var(--mute);margin:6px 0 0}
 .nb{display:block;font-size:11px;color:var(--mute);font-weight:400}
+.opb{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:14px;
+  border-top:1px dashed var(--line);padding-top:12px}
+.opb select{width:auto;max-width:240px;flex:1 1 160px}
+.seg{display:inline-flex;gap:0;margin-left:10px;vertical-align:middle;border:1px solid var(--line);border-radius:7px;overflow:hidden}
+.seg button{background:#fff;border:0;padding:4px 14px;font-size:12.5px;font-weight:600;color:var(--ink2);cursor:pointer}
+.seg button.on{background:var(--accent);color:#fff}
+.vlist{border:1px solid var(--line2);border-radius:8px;overflow:hidden;margin-top:4px}
+.vrow{display:flex;align-items:center;gap:9px;padding:9px 12px;border-bottom:1px solid var(--line2);cursor:pointer;font-size:13.5px}
+.vrow:last-child{border-bottom:0}
+.vrow.on{background:var(--accent-l)}
+.vrow input{width:auto;flex:none}
 
 @media screen and (max-width:760px){
   .swipe{display:block}
@@ -451,6 +463,8 @@ function pBar(extra){
 const QK = ['Q1','Q2','Q3','Q4'];
 let S, tab='guide', per='Q1', mfil=0, sortDate=true, editId=null, dirty=false;
 let ro=false, roName='', mine=null, deptList=[], lastAdd=null, srvMsg='';
+let openStep=0, openSel='';      // 안내 페이지 · 서버 파일 읽기
+let guideMode='edit';            // 안내 페이지 · 작성 / 열람
 
 function uid(){ return Math.random().toString(36).slice(2,9) }
 function fresh(){
@@ -498,7 +512,7 @@ function setStatus(t){ const el=document.getElementById('hSt'); if(el) el.textCo
 window.addEventListener('beforeunload', e=>{ if(dirty){ e.preventDefault(); e.returnValue='' } });
 
 /* ───────── 서버(공유) 저장 ───────── */
-const APPVER = '2026.23';
+const APPVER = '2026.25';
 const LIBKEY = 'church_ledger_lib_v1';
 const DATASHEET = '_data', DATATAG = 'CHURCH_LEDGER_V1';
 const XLSXMIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -704,6 +718,19 @@ async function srvTest(){
   catch(e){ alert('연결하지 못했습니다.\n\n'+(e&&e.message?e.message:e)+'\n\n· 주소가 /exec 로 끝나는지\n· 액세스 권한이 [모든 사용자] 인지\n· 암호가 같은지 확인해 주세요.') }
 }
 
+async function doOpenLoad(){
+  const p = openSel.split('|'), nm = p[0], yr = Number(p[1]);
+  const typed = ($('#openName').value||'').trim();
+  if(!typed){ alert('부서명을 입력해 주세요.'); return }
+  if(typed !== nm){ alert(`부서명이 맞지 않습니다.\n이 자료의 부서명은 「${nm}」 입니다.`); return }
+  try{
+    const j = await api('get', {name:nm, year:yr});
+    if(!confirm(`${yr}년 ${nm} 자료를 불러옵니다.\n지금 화면의 내용은 사라집니다. 계속할까요?`)) return;
+    S = norm(j.rec.data); ro=false; mine=null; editId=null; save();
+    openStep=0; srvMsg=`${nm} 자료를 불러왔습니다.`; tab='guide'; render();
+  }catch(e){ alert('불러오지 못했습니다.\n\n'+(e&&e.message?e.message:e)) }
+}
+
 async function readDept(id){
   const v = id || '';
   if(!v){                                   // 내 부서 자료로 복귀
@@ -720,7 +747,7 @@ async function readDept(id){
   if(!rec){ alert('해당 부서 자료를 찾을 수 없습니다.'); return }
   if(!ro) mine = S;
   S = norm(rec.data); ro=true; roName = rec.name;
-  tab='guide'; per='Q1'; editId=null; mfil=0;
+  tab='guide'; per='Q1'; editId=null; mfil=0; guideMode='view';
   srvMsg=`${rec.name} 자료를 열람 중입니다` + (rec.at?` (저장일 ${new Date(rec.at).toLocaleDateString('ko-KR')})`:'');
   render();
 }
@@ -774,7 +801,7 @@ function orphanCount(){
 }
 
 /* ───────── 렌더 ───────── */
-const TABS = [['guide','안내'],['budget','예산'],['ledger','출납부'],['settle','결산'],['next','새해예산요구'],['data','데이터']];
+const TABS = [['guide','안내'],['budget','예산'],['ledger','출납부'],['settle','결산'],['next','새해예산요구'],['data','⚙']];
 function render(){
   document.getElementById('hTitle').textContent = ro
     ? `${S.meta.year}년 ${roName} 자료열람`
@@ -783,7 +810,7 @@ function render(){
 
   document.getElementById('nav').innerHTML =
     TABS.map(([k,l])=>`<button data-tab="${k}" class="${tab===k?'on':''}">${l}</button>`).join('')
-    + `<div class="navr">${ro?'':'<button id="navSave" class="nsave">저장</button><button id="navXls" class="nsave alt">엑셀</button>'}
+    + `<div class="navr">${(ro||guideMode==='view')?'':'<button id="navSave" class="nsave">저장</button>'}
        <input type="file" id="deptFiles" multiple accept=".xlsx,.csv,.txt,.json" style="display:none">
        <input type="file" id="myFile" accept=".xlsx,.csv,.txt,.json" style="display:none"></div>`;
 
@@ -797,12 +824,10 @@ function render(){
     : (srvMsg? `<div class="robar no-print" style="background:var(--in-bg);border-color:#cfe6da;color:#1d6b4f">${esc(srvMsg)}</div>`:'');
 
   document.getElementById('view').innerHTML = upd + banner +
-    ({guide:vGuide,budget:vBudget,ledger:vLedger,settle:vSettle,next:vNext,data:vData})[tab]();
+    ({guide:vGuide,budget:vBudget,ledger:vLedger,settle:vSettle,next:vNext,data:vData,browse:vBrowse})[tab]();
   document.querySelectorAll('#nav button[data-tab]').forEach(b=>b.onclick=()=>{tab=b.dataset.tab;render();window.scrollTo(0,0)});
   const nsv = document.getElementById('navSave');
   if(nsv) nsv.onclick = ()=>{ serverOn()? srvSave() : saveFile() };
-  const nsh = document.getElementById('navXls');
-  if(nsh) nsh.onclick = saveFile;
   document.getElementById('deptFiles').onchange = e=>{ openDeptFiles(e.target.files); e.target.value='' };
   document.getElementById('myFile').onchange = e=>{ if(e.target.files[0]) openMyFile(e.target.files[0]); e.target.value='' };
   bind();
@@ -827,6 +852,51 @@ function render(){
   }
 }
 
+/* ── 안내 › 열람 — 서버 파일을 골라 읽기 전용으로 본다 ── */
+function viewList(){
+  const srv = deptList || [];
+  if(!serverOn()) return `<p class="hint">서버 주소가 설정되어 있지 않습니다.</p>`;
+  if(!srv.length)  return `<p class="hint">서버에 저장된 자료가 없습니다.</p>
+    <button class="btn g sm" id="vRefresh" style="margin-top:8px">목록 새로고침</button>`;
+  return `<p class="hint">읽을 파일을 하나 고르세요. 고른 자료는 보기만 되고 고칠 수 없습니다.</p>
+    <div class="vlist">
+      ${srv.map(x=>{
+        const on = ro && roName===x.name && S.meta.year===x.year;
+        return `<label class="vrow ${on?'on':''}">
+          <input type="checkbox" data-vfile="${esc(x.name)}|${x.year}" ${on?'checked':''}>
+          <b>${esc(x.name)}_${x.year}</b>
+          <span class="hint" style="margin:0 0 0 auto">${x.at?new Date(x.at).toLocaleDateString('ko-KR'):'-'}</span>
+        </label>`;
+      }).join('')}
+    </div>
+    <button class="btn g sm" id="vRefresh" style="margin-top:10px">목록 새로고침</button>`;
+}
+
+/* ── 안내 › 서버에 저장해 둔 내 부서 자료 불러오기 ── */
+function openBox(){
+  const srv = deptList || [];
+  if(openStep===0){
+    return `<div class="opb no-print no-ro">
+      <button class="btn g sm" id="openStart">파일 읽기</button>
+      <span class="hint" style="margin:0">서버에 저장해 둔 자료를 이어서 작성합니다.</span></div>`;
+  }
+  if(openStep===1){
+    return `<div class="opb no-print no-ro">
+      <select id="openSel">${srv.length
+        ? srv.map(x=>`<option value="${esc(x.name)}|${x.year}" ${openSel===x.name+'|'+x.year?'selected':''}>${esc(x.name)}_${x.year} (${x.at?new Date(x.at).toLocaleDateString('ko-KR'):'-'})</option>`).join('')
+        : '<option value="">서버에 저장된 자료가 없습니다</option>'}</select>
+      <button class="btn sm" id="openOk">확인</button>
+      <button class="btn g sm" id="openNo">취소</button></div>`;
+  }
+  const nm = openSel.split('|')[0];
+  return `<div class="opb no-print no-ro">
+    <span class="hint" style="margin:0">부서명 확인</span>
+    <input type="text" id="openName" placeholder="부서명을 그대로 입력" style="max-width:180px">
+    <button class="btn sm" id="openGo">불러오기</button>
+    <button class="btn g sm" id="openNo">취소</button>
+    <div class="hint" style="width:100%;margin:4px 0 0">${esc(nm)} 자료를 불러옵니다. 파일에 적힌 부서명과 같아야 열립니다.</div></div>`;
+}
+
 /* ── 안내 ── */
 function vGuide(){
   const s=settle();
@@ -834,7 +904,11 @@ function vGuide(){
   ${pHead(`${S.meta.year}년 ${S.meta.dept} 회계장부 안내`, `회계기간 ${PERIOD(S.meta.year)}`)}
   <div class="row">
     <div class="col card" style="flex:2;min-width:340px">
-      <h2>기본 정보</h2>
+      <h2>기본 정보
+        <span class="seg no-print">
+          <button class="${guideMode==='edit'?'on':''}" id="gmEdit">작성</button><button class="${guideMode==='view'?'on':''}" id="gmView">열람</button>
+        </span></h2>
+      ${guideMode==='view' ? viewList() : `
       <p class="hint">회계기간은 ${S.meta.year}.1.1 ~ ${S.meta.year}.12.31 입니다.</p>
       <div class="row">
         <div class="col" style="min-width:120px"><label class="hint" style="margin:0">회계연도</label><input type="number" data-meta="year" value="${S.meta.year}"></div>
@@ -842,6 +916,7 @@ function vGuide(){
       </div>
       <div style="margin-top:12px"><label class="hint" style="margin:0">${S.meta.year-1}년 11월 말 잔고 <span class="badge b-w">전년 12월 시작액</span></label>
         <input type="text" class="n" data-open value="${won(S.openingBalance)}"></div>
+      ${openBox()}`}
     </div>
     <div class="col card" id="qrCard" style="flex:1;min-width:250px">
       <h2>프로그램 받기 QR</h2>
@@ -1262,22 +1337,41 @@ function vNext(){
 }
 
 /* ── 데이터 ── */
+/* ── 다른 부서 자료 보기 (열람 버튼 · 데이터 탭 공용) ── */
+function browseCard(){
+  const all = sources(), lib = all.filter(x=>x.from==='file');
+  return `
+  <div class="card">
+    <h2>다른 부서 자료 보기</h2>
+    <p class="hint">서버에 저장된 부서가 자동으로 나타납니다. 다른 부서 자료는 보기만 되고 고칠 수 없습니다.</p>
+    <div class="tools">
+      <button class="btn g" id="sRefresh">목록 새로고침</button>
+      ${lib.length?`<button class="btn g" id="libClear">받은 파일 목록 비우기</button>`:''}
+    </div>
+    ${all.length? `<table style="margin-top:12px"><thead><tr><th>부서</th><th class="c" style="width:74px">연도</th><th style="width:120px">저장일</th><th class="c" style="width:60px">위치</th><th class="c" style="width:120px"></th></tr></thead><tbody>
+      ${all.map(x=>`<tr><td>${esc(x.name)}</td><td class="c">${x.year}년</td>
+        <td>${x.at? new Date(x.at).toLocaleDateString('ko-KR') : '-'}</td>
+        <td class="c"><span class="badge ${x.from==='server'?'b-ok':'b-w'}">${x.from==='server'?'서버':'파일'}</span></td>
+        <td class="c"><button class="btn g sm" data-lib-read="${esc(x.id)}">열람</button>
+          ${x.from==='file'?`<button class="btn dg sm" data-lib-del="${esc(x.id)}">×</button>`:''}</td></tr>`).join('')}
+      </tbody></table>`
+      : `<p class="hint" style="margin-top:10px">${serverOn()?'아직 서버에 저장된 부서가 없습니다.':'서버 주소를 넣으면 부서 목록이 나타납니다.'}</p>`}
+  </div>`;
+}
+function vBrowse(){
+  return `${pHead(`${S.meta.year}년 부서 자료 열람`, '')}${pBar()}${browseCard()}`;
+}
+
 function vData(){
   const s=settle();
   const mode = window.storage ? 'Claude 앱 내부 저장소' : '이 브라우저';
   const cnt = P.reduce((t,p)=>t+ents(p.k).length,0);
-  const all = sources(), lib = all.filter(x=>x.from==='file');
   return `
   ${pHead(`${S.meta.year}년 ${S.meta.dept} 데이터 관리`, `회계기간 ${PERIOD(S.meta.year)}`)}
 
   <div class="card">
-    <h2>서버 저장 ${serverOn()?'<span class="badge b-ok">연결됨</span>':'<span class="badge b-w">주소 필요</span>'}</h2>
-    <p class="hint">저장 버튼을 누르면 자료가 인터넷에 올라가고, 다른 부서도 아래 목록에서 바로 볼 수 있습니다.</p>
-    <div class="tools no-ro">
-      <button class="btn" id="sSaveBtn">서버에 저장</button>
-      <button class="btn g" id="sLoadBtn">서버에서 불러오기</button>
-      <button class="btn g" id="sTestBtn">연결 확인</button>
-    </div>
+    <h2>연결 확인 ${serverOn()?'<span class="badge b-ok">연결됨</span>':'<span class="badge b-w">주소 필요</span>'}</h2>
+    <p class="hint">화면 맨 위 <b>저장</b> 버튼을 누르면 자료가 인터넷에 올라가고, 다른 부서도 <b>열람</b>에서 바로 볼 수 있습니다.</p>
     <div style="margin-top:12px">
       <label class="hint" style="margin:0">서버 주소 <span style="opacity:.7">(총무님이 배포한 앱스 스크립트 웹앱 주소)</span></label>
       <input type="text" data-meta="server" value="${esc(S.meta.server||'')}" placeholder="${SERVER_URL||'https://script.google.com/macros/s/.../exec'}">
@@ -1302,28 +1396,7 @@ function vData(){
     </div>
   </div>
 
-  <div class="card">
-    <h2>다른 부서 자료 보기</h2>
-    <p class="hint">서버에 저장된 부서가 자동으로 나타납니다. 엑셀 파일을 받으셨다면 [부서 파일 읽기]로 추가할 수도 있습니다.</p>
-    <div class="tools">
-      <button class="btn g" id="sRefresh">목록 새로고침</button>
-      <button class="btn g" id="libAdd">부서 파일 읽기</button>
-      ${window.showDirectoryPicker?`<button class="btn g" id="libFolder">폴더 통째로 읽기</button>`:''}
-      ${lib.length?`<button class="btn g" id="libClear">받은 파일 목록 비우기</button>`:''}
-    </div>
-    ${all.length? `<table style="margin-top:12px"><thead><tr><th>부서</th><th class="c" style="width:74px">연도</th><th style="width:120px">저장일</th><th class="c" style="width:60px">위치</th><th class="c" style="width:120px"></th></tr></thead><tbody>
-      ${all.map(x=>`<tr><td>${esc(x.name)}</td><td class="c">${x.year}년</td>
-        <td>${x.at? new Date(x.at).toLocaleDateString('ko-KR') : '-'}</td>
-        <td class="c"><span class="badge ${x.from==='server'?'b-ok':'b-w'}">${x.from==='server'?'서버':'파일'}</span></td>
-        <td class="c"><button class="btn g sm" data-lib-read="${esc(x.id)}">열람</button>
-          ${x.from==='file'?`<button class="btn dg sm" data-lib-del="${esc(x.id)}">×</button>`:''}</td></tr>`).join('')}
-      </tbody></table>`
-      : `<p class="hint" style="margin-top:10px">${serverOn()?'아직 서버에 저장된 부서가 없습니다.':'서버 주소를 넣으면 부서 목록이 나타납니다.'}</p>`}
-    <div class="note" style="margin-top:12px">
-      다른 부서 자료는 <b>보기만 되고 고칠 수 없습니다.</b>
-      같은 부서가 다시 저장하면 항상 최신 것으로 바뀝니다.
-    </div>
-  </div>
+  ${browseCard()}
 
   <div class="card">
     <h2>새 회계연도 시작</h2>
@@ -1540,8 +1613,38 @@ function bind(){
     if(!u){ alert('먼저 주소를 입력하세요.'); return }
     copyText(u, '주소를 복사했습니다.');
   };
+  if($('#gmEdit')) $('#gmEdit').onclick=()=>{
+    if(ro){ S = mine || S; ro=false; mine=null; roName=''; }
+    guideMode='edit'; srvMsg=''; render();
+  };
+  if($('#gmView')) $('#gmView').onclick=async()=>{
+    guideMode='view'; openStep=0; render();
+    if(serverOn()){ await loadDeptList(); render() }
+  };
+  if($('#vRefresh')) $('#vRefresh').onclick=async()=>{ await loadDeptList(); render() };
+  on('[data-vfile]','change',async e=>{
+    if(!e.target.checked){ if(ro){ S=mine||S; ro=false; mine=null; roName=''; srvMsg=''; render() } return }
+    const v=e.target.dataset.vfile;
+    if(ro){ S=mine||S; ro=false; mine=null; roName=''; }      // 다른 파일로 갈아탈 때
+    await readDept('srv:'+v);
+  });
+  if($('#openStart')) $('#openStart').onclick=async()=>{
+    if(!serverOn()){ alert('서버 주소가 설정되지 않았습니다.'); return }
+    await loadDeptList();
+    openStep=1; openSel = deptList.length? deptList[0].name+'|'+deptList[0].year : ''; render();
+  };
+  if($('#openSel')) $('#openSel').onchange=e=>{ openSel=e.target.value };
+  if($('#openOk')) $('#openOk').onclick=()=>{
+    const v=$('#openSel').value;
+    if(!v){ alert('불러올 자료가 없습니다.'); return }
+    openSel=v; openStep=2; render();
+    const el=$('#openName'); if(el) el.focus();
+  };
+  if($('#openNo')) $('#openNo').onclick=()=>{ openStep=0; render() };
+  if($('#openGo')) $('#openGo').onclick=doOpenLoad;
+  if($('#openName')) $('#openName').onkeydown=ev=>{ if(ev.key==='Enter') doOpenLoad() };
   const du=$('#doUpd'); if(du) du.onclick=applyUpdate;
-  const bm=$('#backMine'); if(bm) bm.onclick=()=>{ if(ro){ S=mine||S; ro=false; mine=null; roName=''; srvMsg=''; tab='guide'; render() } };
+  const bm=$('#backMine'); if(bm) bm.onclick=()=>{ if(ro){ S=mine||S; ro=false; mine=null; roName=''; srvMsg=''; guideMode='edit'; tab='guide'; render() } };
 
   on('[data-xe]','change',e=>{ const i=+e.target.dataset.xe, f=e.target.dataset.f;
     S.nextYear.extraExp[i][f] = f==='amt'? num(e.target.value) : e.target.value; save(); render() });
@@ -1555,8 +1658,6 @@ function bind(){
   if($('#fSave')) $('#fSave').onclick=saveFile;
   if($('#fShare')) $('#fShare').onclick=shareFile;
   if($('#fOpen')) $('#fOpen').onclick=()=>document.getElementById('myFile').click();
-  if($('#libAdd')) $('#libAdd').onclick=()=>document.getElementById('deptFiles').click();
-  if($('#libFolder')) $('#libFolder').onclick=readFolder;
   if($('#libClear')) $('#libClear').onclick=()=>{
     if(!confirm('읽어 둔 다른 부서 목록을 모두 지웁니다. 원본 파일은 그대로 남습니다. 계속할까요?')) return;
     LIB={}; saveLib(); srvMsg=''; render();
@@ -1565,9 +1666,6 @@ function bind(){
   on('[data-lib-del]','click',e=>{ delete LIB[e.target.dataset.libDel.slice(5)]; saveLib(); render() });
   if($('#chkUpd')) $('#chkUpd').onclick=()=>checkUpdate(true);
   if($('#doUpd2')) $('#doUpd2').onclick=applyUpdate;
-  if($('#sSaveBtn')) $('#sSaveBtn').onclick=()=>srvSave();
-  if($('#sLoadBtn')) $('#sLoadBtn').onclick=srvLoad;
-  if($('#sTestBtn')) $('#sTestBtn').onclick=srvTest;
   if($('#sRefresh')) $('#sRefresh').onclick=async()=>{ await loadDeptList(); srvMsg='목록을 새로 읽었습니다.'; render() };
   if($('#newYear')) $('#newYear').onclick=()=>{
     if(!confirm(`${S.meta.year+1}년 장부를 새로 시작합니다. 현재 기록은 사라집니다. 백업하셨나요?`)) return;
