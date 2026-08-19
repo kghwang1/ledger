@@ -180,6 +180,13 @@ ol.steps small{color:var(--mute);display:block}
   .card{border:0;border-radius:0;padding:0;margin:0 0 7mm;background:none}
   .row{display:block}
   .col{width:100%!important;min-width:0!important;flex:none!important;margin:0 0 6mm}
+  /* 예산·결산은 두 표를 좌우로 나란히 */
+  .row.two{display:flex!important;gap:6mm;align-items:flex-start}
+  .row.two>.col{width:calc(50% - 3mm)!important;flex:1 1 0!important;margin:0;break-inside:avoid}
+  .row.two table{font-size:8.2pt}
+  .row.two th,.row.two td{padding:2px 3px}
+  .row.two table{min-width:0!important;table-layout:auto}
+  .row.two th[style],.row.two td[style]{width:auto!important}
   .scroll{max-height:none;overflow:visible;border:0;border-radius:0}
   table{width:100%;max-width:100%;font-size:9pt;border-collapse:collapse}
   table.lg,table.wt,table.wb,table.wn,table.ws,table.we,table.wi2{min-width:0!important}
@@ -553,7 +560,7 @@ function setStatus(t){ const el=document.getElementById('hSt'); if(el) el.textCo
 window.addEventListener('beforeunload', e=>{ if(dirty){ e.preventDefault(); e.returnValue='' } });
 
 /* ───────── 서버(공유) 저장 ───────── */
-const APPVER = '2026.39';
+const APPVER = '2026.40';
 const LIBKEY = 'church_ledger_lib_v1';
 const DATASHEET = '_data', DATATAG = 'CHURCH_LEDGER_V1';
 const XLSXMIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -1086,7 +1093,7 @@ function vBudget(){
   ${pHead(`${S.meta.year}년 ${S.meta.dept} 운영계획`, `회계기간 ${PERIOD(S.meta.year)} · (1월 1일 기준)`)}
   ${pBar()}
   <div class="note">여기 입력한 <b>항목 이름</b>이 출납부의 선택 메뉴가 됩니다. 처음 정한 이름은 정산이 끝날 때까지 변경하지 마세요. 수입 합계와 지출 합계가 같아야 합니다.</div>
-  <div class="row">
+  <div class="row two">
     <div class="col card">
       <h2>수입 계획</h2>
       <p class="hint">첫 번째 항목(이월금)은 결산에서 12월 잔고가 자동으로 들어갑니다.</p>
@@ -1407,7 +1414,7 @@ function vSettle(){
       <div class="ph-s">회계기간 ${PERIOD(S.meta.year)} · 12월은 가결산</div>
     </div>
     ${pBar()}
-    <div class="row">
+    <div class="row two">
       <div class="col">
         <h2 style="font-size:14px">수입 결산</h2>
         <table class="we"><thead><tr><th style="width:110px">항목</th><th class="n">예산</th><th class="n">수입</th><th class="n">증감</th></tr></thead><tbody>
