@@ -553,7 +553,7 @@ function setStatus(t){ const el=document.getElementById('hSt'); if(el) el.textCo
 window.addEventListener('beforeunload', e=>{ if(dirty){ e.preventDefault(); e.returnValue='' } });
 
 /* ───────── 서버(공유) 저장 ───────── */
-const APPVER = '2026.38';
+const APPVER = '2026.39';
 const LIBKEY = 'church_ledger_lib_v1';
 const DATASHEET = '_data', DATATAG = 'CHURCH_LEDGER_V1';
 const XLSXMIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -1989,14 +1989,120 @@ function makeBlob(){                       // 엑셀이 준비됐으면 엑셀, 
 async function readAnyFile(file){
   if(/\.xlsx$/i.test(file.name)){
     await loadXLSX();
-    const wb = XLSX.read(new Uint8Array(await file.arrayBuffer()), {type:'array'});
+    const wb = XLSX.read(new Uint8Array(await file.arrayBuffer()), {type:'array', cellDates:true});
     const ws = wb.Sheets[DATASHEET];
-    if(!ws) throw new Error('이 엑셀에는 불러올 자료가 없습니다');
-    const rows = XLSX.utils.sheet_to_json(ws, {header:1});
-    if(!rows.length || String(rows[0][0]).trim()!==DATATAG) throw new Error('형식이 다릅니다');
-    return parseFile(rows.slice(1).map(r=>r[0]||'').join(''));
+    if(ws){
+      const rows = XLSX.utils.sheet_to_json(ws, {header:1});
+      if(rows.length && String(rows[0][0]).trim()===DATATAG)
+        return parseFile(rows.slice(1).map(r=>r[0]||'').join(''));
+    }
+    return readOldExcel(wb);                     // 처음 쓰시던 원본 서식
   }
   return parseFile(await file.text());
+}
+
+/* ── 원본 엑셀 서식(안내·예산·12월·1~4분기…) 읽기 ── */
+function readOldExcel(wb){
+  const NAMES = {DEC:'12월', Q1:'1분기', Q2:'2분기', Q3:'3분기', Q4:'4분기'};
+  const grid = n => wb.Sheets[n] ? XLSX.utils.sheet_to_json(wb.Sheets[n], {header:1, raw:true, defval:null}) : null;
+  const bg = grid('예산');
+  if(!bg) throw new Error('예산 시트가 없어 읽을 수 없습니다');
+
+  const cell = (g,r,c) => (g[r] && g[r][c]!=null) ? g[r][c] : null;   // 0부터 세는 행·열
+  const num  = v => { const n=parseInt(String(v==null?'':v).replace(/[^0-9-]/g,''),10); return isNaN(n)?0:n };
+
+  // 부서·연도 — D2 / F2
+  let dept = String(cell(bg,1,3)||'').trim();
+  let year = num(cell(bg,1,5)) || new Date().getFullYear();
+
+  // 수입 항목 B6~ / C6~ , 지출 항목 F6~ / G6~ / H6~
+  const inc=[], exp=[];
+  const skip = t => !t || t==='계' || t.length>20 || /^[>*·-]/.test(t) ||
+                    /필수|주의|참고|보호|금지|사용됨|입력|안내/.test(t);
+  let doneI=false, doneE=false;
+  for(let r=5; r<40; r++){
+    const t1=String(cell(bg,r,1)||'').trim(), t2=String(cell(bg,r,5)||'').trim();
+    if(t1==='계') doneI=true;
+    if(t2==='계') doneE=true;
+    if(!doneI && !skip(t1)) inc.push({name:t1, budget:num(cell(bg,r,2))});
+    if(!doneE && !skip(t2)) exp.push({name:t2, budget:num(cell(bg,r,6)),
+                                      basis:String(cell(bg,r,7)||'').trim()});
+  }
+  if(!inc.length && !exp.length) throw new Error('예산 항목을 찾지 못했습니다');
+
+  const pad = n => String(n).padStart(2,'0');
+  const iso = (v, defY) => {
+    if(v==null || v==='') return '';
+    if(typeof v==='object' && typeof v.getFullYear==='function' && !isNaN(v.getTime()))
+      return v.getFullYear()+'-'+pad(v.getMonth()+1)+'-'+pad(v.getDate());
+    if(typeof v==='number' && v>20000 && v<80000){
+      const d = new Date(Date.UTC(1899,11,30) + v*86400000);
+      return d.getUTCFullYear()+'-'+pad(d.getUTCMonth()+1)+'-'+pad(d.getUTCDate());
+    }
+    const t = String(v);
+    let m = t.match(/(\d{4})[-.\/](\d{1,2})[-.\/](\d{1,2})/);
+    if(m) return m[1]+'-'+pad(+m[2])+'-'+pad(+m[3]);
+    m = t.match(/(\d{1,2})\s*월\s*(\d{1,2})\s*일/);
+    if(m) return (defY||year)+'-'+pad(+m[1])+'-'+pad(+m[2]);
+    const d2 = new Date(t);
+    return isNaN(d2.getTime()) ? '' : d2.getFullYear()+'-'+pad(d2.getMonth()+1)+'-'+pad(d2.getDate());
+  };
+
+  const entries = {DEC:[],Q1:[],Q2:[],Q3:[],Q4:[]};
+  let opening = 0, gotOpening = false;
+  Object.keys(NAMES).forEach(k=>{
+    const g = grid(NAMES[k]); if(!g) return;
+
+    let hr=-1, col={};                                   // '관/항/날짜/금액/산출근거' 머리글 줄을 찾는다
+    for(let r=0; r<Math.min(g.length,12) && hr<0; r++){
+      const row=g[r]||[];
+      for(let c=0;c<row.length;c++){
+        const v=String(row[c]==null?'':row[c]).trim();
+        if(v==='관'){ hr=r; col.type=c }
+        else if(hr===r || (hr<0 && v==='관')){}
+      }
+      if(hr===r){
+        for(let c=0;c<row.length;c++){
+          const v=String(row[c]==null?'':row[c]).trim();
+          if(v==='항') col.cat=c;
+          else if(v==='날짜') col.date=c;
+          else if(v==='금액') col.amt=c;
+          else if(/산출근거|비고/.test(v)) col.note=c;
+        }
+      }
+    }
+    if(hr<0 || col.cat==null || col.amt==null) return;    // 이 시트는 건너뛴다
+
+    for(let r=hr+1; r<g.length; r++){
+      const head = String(cell(g,r,col.type)||'').trim();
+      if(/소계|잔고|합계|오류/.test(head)) break;          // 표 아래 요약 부분부터는 읽지 않는다
+      const type = head;
+      const cat  = String(cell(g,r,col.cat)||'').trim();
+      const amt  = cell(g,r,col.amt);
+      if(!type && /이월금|이월|잔고/.test(cat)){          // 각 시트 첫 줄의 이월 잔고는 거래가 아니다
+        if(k==='DEC' && !gotOpening && amt!=null){ opening = num(amt); gotOpening = true }
+        continue;
+      }
+      if(type!=='수입' && type!=='지출') continue;
+      if(amt==null || num(amt)===0) continue;
+      entries[k].push({id:uid(), type:type, cat:cat, date:iso(cell(g,r,col.date), k==='DEC'?year-1:year),
+                       amount:Math.abs(num(amt)),
+                       note:String(cell(g,r,col.note==null?-1:col.note)||'').trim(), img:''});
+    }
+  });
+
+  const total = Object.keys(entries).reduce((t,k)=>t+entries[k].length,0);
+  if(!total) throw new Error('거래 내역을 찾지 못했습니다');
+
+  entries.DEC.forEach(e=>{                                // 전년 12월로 연도를 맞춘다
+    const m = e.date.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if(m && m[2]==='12' && +m[1]!==year-1) e.date = (year-1)+'-12-'+m[3];
+  });
+
+  return {name:dept||'부서', year:year, at:0,
+    data:{meta:{year:year, dept:dept, church:'', url:'', server:'', serverKey:'', writer:'', leader:''},
+          openingBalance:opening, incomeItems:inc, expenseItems:exp, entries:entries,
+          nextYear:{expense:{},income:{},basis:{},extraExp:[],extraInc:[],dec:0,note:''}}};
 }
 
 /* ───────── 시작 ───────── */
