@@ -569,7 +569,7 @@ function setStatus(t){ const el=document.getElementById('hSt'); if(el) el.textCo
 window.addEventListener('beforeunload', e=>{ if(dirty){ e.preventDefault(); e.returnValue='' } });
 
 /* ───────── 서버(공유) 저장 ───────── */
-const APPVER = '2026.42';
+const APPVER = '2026.43';
 const LIBKEY = 'church_ledger_lib_v1';
 const DATASHEET = '_data', DATATAG = 'CHURCH_LEDGER_V1';
 const XLSXMIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -1234,8 +1234,8 @@ function vStatus(){
 function vAll(){
   const keep = per, keepF = formOpen, keepM = mfil;
   formOpen = false; mfil = 0; allMode = true;        // 입력창·월필터 없이 뽑는다
-  let out = `<div class="tools no-print"><span class="hint" style="margin:0">현재 상황부터 4분기까지 이어서 인쇄합니다.</span>
-    <span class="sp"></span><button class="btn" onclick="window.print()">전체 인쇄 (A4)</button></div>`;
+  let out = `<div class="tools no-print"><span class="hint" style="margin:0">현재 상황부터 4분기까지 이어서 인쇄합니다. 인쇄창이 닫혔으면 아래 버튼을 누르세요.</span>
+    <span class="sp"></span><button class="btn" onclick="window.print()">다시 인쇄</button></div>`;
   out += `<div class="allprint">` + vStatus();
   P.forEach(x=>{
     per = x.k;
@@ -1777,7 +1777,11 @@ function bind(){
     if(used(S.expenseItems[i].name) && !confirm('이 항목으로 기록된 거래가 있습니다. 그래도 삭제할까요?')) return;
     S.expenseItems.splice(i,1); save(); render() });
 
-  on('[data-per]','click',e=>{ per=e.target.dataset.per; mfil=0; editId=null; formImg=''; draft=null; formOpen=true; render() });
+  on('[data-per]','click',e=>{
+    per=e.target.dataset.per; mfil=0; editId=null; formImg=''; draft=null; formOpen=true;
+    render();
+    if(per==='ALL') setTimeout(()=>{ try{ window.print() }catch(e){} }, 300);   // 화면을 그린 뒤 인쇄창
+  });
   on('[data-mf]','click',e=>{ mfil=+e.target.dataset.mf; render() });
   if($('#tgSort')) $('#tgSort').onclick=()=>{ sortDate=!sortDate; render() };
   on('[data-rm]','click',e=>{ const id=e.target.dataset.rm;
