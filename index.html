@@ -125,7 +125,24 @@ ol.steps small{color:var(--mute);display:block}
 .nb{display:block;font-size:11px;color:var(--mute);font-weight:400}
 .allprint .chips,.allprint .tools,.allprint .form,.allprint .swipe{display:none!important}
 .allprint .card h2 button{display:none}
+.allprint .no-ro,.allprint .form,.allprint .chips,.allprint .swipe,
+.allprint [data-ed],.allprint [data-rm],.allprint [data-lib-del],
+.allprint input[type=file],.allprint button{display:none!important}
+.allprint input,.allprint select,.allprint textarea{
+  border:0;background:transparent;padding:2px 4px;pointer-events:none}
 .allsec{margin-top:26px;border-top:2px solid var(--line);padding-top:18px}
+.prchk{display:flex;gap:12px;flex-wrap:wrap;align-items:center;flex:1 1 300px}
+.prchk label{display:flex;align-items:center;gap:4px;font-size:13px;cursor:pointer;white-space:nowrap}
+.prchk input{width:auto;flex:none}
+.psec{margin-top:26px;border-top:2px solid var(--line);padding-top:18px}
+.cover{background:#fff;border:1px solid var(--line);border-radius:var(--r);padding:40px 34px;text-align:center}
+.cv-church{font-size:17px;color:var(--ink2)}
+.cv-title{font-size:26px;font-weight:700;margin:14px 0 40px;letter-spacing:-.02em}
+.cv-dates{text-align:left;max-width:340px;margin:0 auto 40px;font-size:15px;line-height:2}
+.cv-sign,.cv-list{text-align:left;max-width:420px;margin:0 auto 30px}
+.cv-lbl{font-weight:700;font-size:15px;margin-bottom:10px}
+.cv-row{display:flex;gap:30px;font-size:15px;padding-left:6px}
+.cv-list ol{margin:0;padding-left:22px;font-size:15px;line-height:2}
 .opb{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:14px;
   border-top:1px dashed var(--line);padding-top:12px}
 .opb select{width:auto;max-width:240px;flex:1 1 160px}
@@ -200,6 +217,12 @@ ol.steps small{color:var(--mute);display:block}
   .pgbreak{break-before:page;page-break-before:always}
   .allsec{break-before:page;page-break-before:always;margin:0;border:0;padding:0}
   .allprint .allsec .pgbreak{break-before:page;page-break-before:always}
+  .psec{break-before:page;page-break-before:always;margin:0;border:0;padding:0}
+  .allprint>.psec:first-child,.allprint>.cover:first-child{break-before:auto;page-break-before:auto}
+  .cover{border:0;padding:26mm 0 0;height:auto;break-after:page;page-break-after:always}
+  .cv-church{font-size:13pt} .cv-title{font-size:20pt;margin:10mm 0 22mm}
+  .cv-dates{font-size:12pt;margin-bottom:22mm} .cv-row,.cv-list ol{font-size:12pt}
+  .cv-lbl{font-size:12pt}
   .scroll table{font-size:8.6pt}
   th,td{padding:2px 4px;word-break:break-word;border-bottom:.4pt solid #bbb}
   th{background:#eee!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;font-size:8.4pt}
@@ -510,6 +533,7 @@ const QK = ['Q1','Q2','Q3','Q4'];
 let S, tab='guide', per='Q1', mfil=0, sortDate=true, editId=null, dirty=false;
 let ro=false, roName='', mine=null, deptList=[], lastAdd=null, srvMsg='';
 let allMode=false;
+let prSel={cover:true,budget:false,ledger:false,settle:false,next:false}, printMode=false;
 let openStep=0, openSel='';      // 안내 페이지 · 서버 파일 읽기
 let guideMode='edit';            // 안내 페이지 · 작성 / 열람
 let prevKey='', prevCache={};    // 열람 · 파일에 마우스를 올렸을 때 미리 보여 줄 기본 정보
@@ -569,7 +593,7 @@ function setStatus(t){ const el=document.getElementById('hSt'); if(el) el.textCo
 window.addEventListener('beforeunload', e=>{ if(dirty){ e.preventDefault(); e.returnValue='' } });
 
 /* ───────── 서버(공유) 저장 ───────── */
-const APPVER = '2026.43';
+const APPVER = '2026.44';
 const LIBKEY = 'church_ledger_lib_v1';
 const DATASHEET = '_data', DATATAG = 'CHURCH_LEDGER_V1';
 const XLSXMIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -904,7 +928,7 @@ function render(){
     : (srvMsg? `<div class="robar no-print" style="background:var(--in-bg);border-color:#cfe6da;color:#1d6b4f">${esc(srvMsg)}</div>`:'');
 
   document.getElementById('view').innerHTML = upd + banner +
-    ({guide:vGuide,budget:vBudget,ledger:vLedger,settle:vSettle,next:vNext,data:vData,browse:vBrowse})[tab]();
+    ({guide:vGuide,budget:vBudget,ledger:vLedger,settle:vSettle,next:vNext,data:vData,browse:vBrowse,print:vPrint})[tab]();
   document.querySelectorAll('#nav button[data-tab]').forEach(b=>b.onclick=()=>{
     const k=b.dataset.tab;
     if(k==='ledger' && tab!=='ledger'){                 // 출납부를 열면 오늘 날짜의 분기·달로
@@ -945,6 +969,59 @@ function render(){
     }
     lastAdd=null;
   }
+}
+
+/* ── 인쇄 묶음 ── */
+function coverPage(){
+  const d=new Date();
+  return `<div class="cover">
+    <div class="cv-church">${esc(S.meta.church||'신대중앙교회')}</div>
+    <div class="cv-title">(&nbsp;&nbsp; ${esc(S.meta.dept||'')} &nbsp;&nbsp;) 예결산 자료</div>
+    <div class="cv-dates">
+      <div>제출일 :&nbsp; ${S.meta.year}. &nbsp; 12. </div>
+      <div>결산일 :&nbsp; ${S.meta.year}. 12. 1. </div>
+    </div>
+    <div class="cv-sign">
+      <div class="cv-lbl">제출자</div>
+      <div class="cv-row"><span>팀장 : ${esc(S.meta.leader||'')}</span><span>작성자 : ${esc(S.meta.writer||'')}</span></div>
+    </div>
+    <div class="cv-list">
+      <div class="cv-lbl">제출자료</div>
+      <ol>
+        <li>통장 (지출내역 출력)</li>
+        <li>전년 12월 출납부</li>
+        <li>분기별 수입·지출 내역</li>
+        <li>영수증</li>
+        <li>새해 예산요구</li>
+      </ol>
+    </div>
+  </div>`;
+}
+function vPrint(){
+  const keep=per, keepF=formOpen, keepM=mfil;
+  let out='';
+  if(prSel.cover)  out += coverPage();
+  if(prSel.budget) out += `<div class="psec">${stripTools(vBudget())}</div>`;
+  if(prSel.ledger){
+    formOpen=false; mfil=0; allMode=true;
+    let led = stripTools(vStatus());
+    P.forEach(x=>{ per=x.k; led += `<div class="allsec">${stripTools(vLedger())}</div>` });
+    out += `<div class="psec">${led}</div>`;
+    per=keep; formOpen=keepF; mfil=keepM; allMode=false;
+  }
+  if(prSel.settle) out += `<div class="psec">${stripTools(vSettle())}</div>`;
+  if(prSel.next)   out += `<div class="psec">${stripTools(vNext())}</div>`;
+  if(!out) out = `<p class="hint">인쇄할 항목을 하나 이상 고르세요.</p>`;
+  return `<div class="tools no-print">
+      <span class="hint" style="margin:0">고른 자료를 이어서 인쇄합니다.</span>
+      <span class="sp"></span>
+      <button class="btn g" id="prBack">돌아가기</button>
+      <button class="btn" onclick="window.print()">인쇄</button>
+    </div>
+    <div class="allprint">${out}</div>`;
+}
+function stripTools(html){                    // 각 화면의 인쇄·조작 버튼 줄을 걷어낸다
+  return String(html).replace(/<div class="tools no-print">[\s\S]*?<\/div>\s*/g,'');
 }
 
 /* ── 안내 › 열람 — 서버 파일을 골라 읽기 전용으로 본다 ── */
@@ -995,6 +1072,17 @@ function viewList(){
 }
 
 /* ── 안내 › 서버에 저장해 둔 내 부서 자료 불러오기 ── */
+function printBox(){
+  const it=[['cover','표지'],['budget','예산'],['ledger','출납부'],['settle','결산'],['next','새해예산요구']];
+  const all = it.every(x=>prSel[x[0]]);
+  return `<div class="opb no-print no-ro" style="align-items:flex-start">
+    <b style="font-size:13.5px;padding-top:3px">인쇄</b>
+    <span class="prchk">
+      ${it.map(x=>`<label><input type="checkbox" data-pr="${x[0]}" ${prSel[x[0]]?'checked':''}> ${x[1]}</label>`).join('')}
+      <label><input type="checkbox" data-pr="all" ${all?'checked':''}> <b>전체</b></label>
+    </span>
+    <button class="btn sm" id="prGo">인쇄 화면</button></div>`;
+}
 function openBox(){
   const srv = deptList || [];
   if(openStep===0){
@@ -1046,7 +1134,8 @@ function vGuide(){
       </div>
       <div style="margin-top:12px"><label class="hint" style="margin:0">${S.meta.year-1}년 11월 말 잔고 <span class="badge b-w">전년 12월 시작액</span></label>
         <input type="text" class="n" data-open value="${won(S.openingBalance)}"></div>
-      ${openBox()}`}
+      ${openBox()}
+      ${printBox()}`}
     </div>
     <div class="col card" id="qrCard" style="flex:1;min-width:250px">
       <h2>프로그램 받기 QR</h2>
@@ -1884,6 +1973,18 @@ function bind(){
     if(ro){ S=mine||S; ro=false; mine=null; roName=''; }      // 다른 파일로 갈아탈 때
     await readDept('srv:'+v);
   });
+  on('[data-pr]','change',e=>{
+    const k=e.target.dataset.pr, on=e.target.checked;
+    if(k==='all') ['cover','budget','ledger','settle','next'].forEach(x=>prSel[x]=on);
+    else prSel[k]=on;
+    render();
+  });
+  if($('#prGo')) $('#prGo').onclick=()=>{
+    if(!['cover','budget','ledger','settle','next'].some(k=>prSel[k])){ alert('인쇄할 항목을 하나 이상 고르세요.'); return }
+    tab='print'; render(); window.scrollTo(0,0);
+    setTimeout(()=>{ try{ window.print() }catch(e){} }, 350);
+  };
+  if($('#prBack')) $('#prBack').onclick=()=>{ tab='guide'; render(); window.scrollTo(0,0) };
   if($('#openStart')) $('#openStart').onclick=async()=>{
     if(!serverOn()){ alert('서버 주소가 설정되지 않았습니다.'); return }
     await loadDeptList();
