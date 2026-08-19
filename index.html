@@ -123,6 +123,9 @@ ol.steps small{color:var(--mute);display:block}
 .scroll thead th{position:sticky;top:0;z-index:1}
 .swipe{display:none;font-size:11.5px;color:var(--mute);margin:6px 0 0}
 .nb{display:block;font-size:11px;color:var(--mute);font-weight:400}
+.allprint .chips,.allprint .tools,.allprint .form,.allprint .swipe{display:none!important}
+.allprint .card h2 button{display:none}
+.allsec{margin-top:26px;border-top:2px solid var(--line);padding-top:18px}
 .opb{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:14px;
   border-top:1px dashed var(--line);padding-top:12px}
 .opb select{width:auto;max-width:240px;flex:1 1 160px}
@@ -187,11 +190,16 @@ ol.steps small{color:var(--mute);display:block}
   .row.two th,.row.two td{padding:2px 3px}
   .row.two table{min-width:0!important;table-layout:auto}
   .row.two th[style],.row.two td[style]{width:auto!important}
+  .row.two table.wn{font-size:7.6pt}
+  .row.two table.wn th,.row.two table.wn td{padding:2px}
   .scroll{max-height:none;overflow:visible;border:0;border-radius:0}
   table{width:100%;max-width:100%;font-size:9pt;border-collapse:collapse}
   table.lg,table.wt,table.wb,table.wn,table.ws,table.we,table.wi2{min-width:0!important}
   .card{overflow:visible!important}
   .swipe{display:none!important}
+  .pgbreak{break-before:page;page-break-before:always}
+  .allsec{break-before:page;page-break-before:always;margin:0;border:0;padding:0}
+  .allprint .allsec .pgbreak{break-before:page;page-break-before:always}
   .scroll table{font-size:8.6pt}
   th,td{padding:2px 4px;word-break:break-word;border-bottom:.4pt solid #bbb}
   th{background:#eee!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;font-size:8.4pt}
@@ -501,6 +509,7 @@ function pBar(extra){
 const QK = ['Q1','Q2','Q3','Q4'];
 let S, tab='guide', per='Q1', mfil=0, sortDate=true, editId=null, dirty=false;
 let ro=false, roName='', mine=null, deptList=[], lastAdd=null, srvMsg='';
+let allMode=false;
 let openStep=0, openSel='';      // 안내 페이지 · 서버 파일 읽기
 let guideMode='edit';            // 안내 페이지 · 작성 / 열람
 let prevKey='', prevCache={};    // 열람 · 파일에 마우스를 올렸을 때 미리 보여 줄 기본 정보
@@ -560,7 +569,7 @@ function setStatus(t){ const el=document.getElementById('hSt'); if(el) el.textCo
 window.addEventListener('beforeunload', e=>{ if(dirty){ e.preventDefault(); e.returnValue='' } });
 
 /* ───────── 서버(공유) 저장 ───────── */
-const APPVER = '2026.40';
+const APPVER = '2026.42';
 const LIBKEY = 'church_ledger_lib_v1';
 const DATASHEET = '_data', DATATAG = 'CHURCH_LEDGER_V1';
 const XLSXMIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -1221,13 +1230,30 @@ function vStatus(){
   ${orphanCount()?`<div class="note w">예산에 없는 항목으로 기록된 거래가 ${orphanCount()}건 있습니다. 각 기간에서 <span class="badge b-w">미등록</span> 표시를 확인하세요.</div>`:''}`;
 }
 
+/* ── 출납부 › 전체 출력 ── */
+function vAll(){
+  const keep = per, keepF = formOpen, keepM = mfil;
+  formOpen = false; mfil = 0; allMode = true;        // 입력창·월필터 없이 뽑는다
+  let out = `<div class="tools no-print"><span class="hint" style="margin:0">현재 상황부터 4분기까지 이어서 인쇄합니다.</span>
+    <span class="sp"></span><button class="btn" onclick="window.print()">전체 인쇄 (A4)</button></div>`;
+  out += `<div class="allprint">` + vStatus();
+  P.forEach(x=>{
+    per = x.k;
+    out += `<div class="allsec">` + vLedger() + `</div>`;
+  });
+  per = keep; formOpen = keepF; mfil = keepM; allMode = false;
+  return out + `</div>`;
+}
+
 /* ── 출납부 ── */
 function vLedger(){
   const chips = `<div class="chips no-print">
     <button class="chip ${per==='SUM'?'on':''}" data-per="SUM">현재 상황</button>
     ${P.map(x=>`<button class="chip ${x.k===per?'on':''}" data-per="${x.k}" title="${x.d(S.meta.year)}">${pLabel(x)}</button>`).join('')}
+    <button class="chip ${per==='ALL'?'on':''}" data-per="ALL">출납부 출력</button>
   </div>`;
   if(per==='SUM') return chips + vStatus();
+  if(per==='ALL') return chips + vAll();
   const p = P.find(x=>x.k===per);
   const list = sorted(per);
   const K = knownCats();
@@ -1253,10 +1279,11 @@ function vLedger(){
   ${chips}
 
   <div class="card">
-    <h2 class="no-print">${p.prev?`${String(S.meta.year-1).slice(2)}년 12월 수입 및 지출 내역`:`${pLabel(p)} 수입 및 지출 내역 <span class="hint" style="display:inline">${p.d(S.meta.year)}</span>`}</h2>
+    <h2 class="no-print">${p.prev?`${String(S.meta.year-1).slice(2)}년 12월 수입 및 지출 내역`:`${pLabel(p)} 수입 및 지출 내역 <span class="hint" style="display:inline">${p.d(S.meta.year)}</span>`}
+      <button class="btn g sm" style="margin-left:10px;vertical-align:middle" onclick="window.print()">인쇄 (A4)</button></h2>
     ${p.prev?`<div class="note no-print">작년 결산에서 가결산으로 잡아 두었던 12월을 실제 집행한 내역이며, ${S.meta.year}년 결산(1~12월)에는 포함되지 않고 따로 보고합니다.</div>`:''}
 
-    ${formOpen?'':`<div class="tools no-print no-ro" style="margin-bottom:12px">
+    ${(formOpen||allMode)?'':`<div class="tools no-print no-ro" style="margin-bottom:12px">
       <button class="btn" id="fMore">＋ 계속 입력</button>
       <span class="hint" style="margin:0">방금 넣은 내용이 아래에 표시됩니다.</span></div>`}
     <div class="form no-print no-ro" ${formOpen?'':'style="display:none"'}>
@@ -1289,7 +1316,6 @@ function vLedger(){
       ${p.m.map(m=>`<button class="chip ${mfil===m?'on':''}" data-mf="${m}">${m}월</button>`).join('')}
       <span class="sp"></span>
       <button class="btn g sm" id="tgSort">${sortDate?'날짜순':'입력순'} ▾</button>
-      <button class="btn g sm" onclick="window.print()">인쇄 (A4)</button>
     </div>
 
     <div class="row">
@@ -1313,7 +1339,7 @@ function vLedger(){
         ${rows.length===0?'<p class="hint" style="margin-top:10px">아직 기록이 없습니다. 위 입력창에서 추가하세요.</p>':'<p class="swipe">← 표를 옆으로 밀면 산출근거와 잔액을 볼 수 있습니다 →</p>'}
       </div>
 
-      <div class="col" style="flex:2;min-width:280px">
+      <div class="col pgbreak" style="flex:2;min-width:280px">
         <div class="card" style="margin:0">
           <h2 style="font-size:14px">${pLabel(p)} 정산</h2>
           <div class="kv"><span>${per==='DEC'?`${S.meta.year-1}년 11월 말 잔고`:per==='Q1'?'이월금':'전 분기 잔고'}</span><b>${won(opening(per))}</b></div>
@@ -1342,14 +1368,20 @@ function itemPanel(k){
   const se=S.expenseItems.reduce((s,i)=>s+catAmt(k,i.name,true),0);
   return `<div class="card" style="margin-top:16px">
     <h2 style="font-size:14px">항목별 소계</h2>
-    <table><thead><tr><th>수입</th><th class="n">소계</th>${isQ?'<th class="n">누계</th>':''}</tr></thead><tbody>
-    ${r(S.incomeItems.slice(1),'in',false)}
-    <tr class="sub"><td>계</td><td class="n">${won(si)}</td>${isQ?`<td class="n">${won(S.incomeItems.slice(1).reduce((s,i)=>s+cumAmt(k,i.name,false),0))}</td>`:''}</tr>
-    </tbody></table>
-    <table style="margin-top:12px"><thead><tr><th>지출</th><th class="n">소계</th>${isQ?'<th class="n">누계</th>':''}</tr></thead><tbody>
-    ${r(S.expenseItems,'out',true)}
-    <tr class="sub"><td>계</td><td class="n">${won(se)}</td>${isQ?`<td class="n">${won(S.expenseItems.reduce((s,i)=>s+cumAmt(k,i.name,true),0))}</td>`:''}</tr>
-    </tbody></table></div>`;
+    <div class="row two">
+      <div class="col">
+        <table><thead><tr><th>수입</th><th class="n">소계</th>${isQ?'<th class="n">누계</th>':''}</tr></thead><tbody>
+        ${r(S.incomeItems.slice(1),'in',false)}
+        <tr class="sub"><td>계</td><td class="n">${won(si)}</td>${isQ?`<td class="n">${won(S.incomeItems.slice(1).reduce((s,i)=>s+cumAmt(k,i.name,false),0))}</td>`:''}</tr>
+        </tbody></table>
+      </div>
+      <div class="col">
+        <table><thead><tr><th>지출</th><th class="n">소계</th>${isQ?'<th class="n">누계</th>':''}</tr></thead><tbody>
+        ${r(S.expenseItems,'out',true)}
+        <tr class="sub"><td>계</td><td class="n">${won(se)}</td>${isQ?`<td class="n">${won(S.expenseItems.reduce((s,i)=>s+cumAmt(k,i.name,true),0))}</td>`:''}</tr>
+        </tbody></table>
+      </div>
+    </div></div>`;
 }
 /* 날짜 표기 — 화면은 26.02.11, 속으로는 2026-02-11 로 다룬다 */
 function fmtDate(iso){
@@ -1492,7 +1524,8 @@ function vNext(){
   <div class="note no-print">${ny}년 부서 운영계획입니다. 올해 결산액이 자동으로 채워지므로 오른쪽 <b>${ny}년 예산</b> 칸만 입력하면 됩니다. 내년에 새로 생기는 항목은 표 아래 <b>항목 추가</b>로 넣으세요. 지출 총계와 수입 총계가 같아야 합니다.</div>
   ${pBar(`<button class="btn g sm no-ro" id="copyPrev">올해 결산액 그대로 채우기</button>`)}
 
-  <div class="card">
+  <div class="row two">
+  <div class="col card">
     <h2>${ny}년 지출 계획</h2>
     <table class="wn"><thead><tr><th style="width:150px">항목</th><th class="n" style="width:110px">${S.meta.year}년 지출결산</th><th class="n" style="width:120px">${ny}년 지출예산</th><th class="n" style="width:100px">증감</th><th style="width:190px">산출 내역</th><th class="no-print no-ro" style="width:34px"></th></tr></thead><tbody>
     ${S.expenseItems.map((it,i)=>{const v=+nE[it.name]||0;return `<tr>
@@ -1514,7 +1547,7 @@ function vNext(){
     <button class="btn g sm no-ro" style="margin-top:10px" id="addXE">+ 지출 항목 추가</button>
   </div>
 
-  <div class="card">
+  <div class="col card">
     <h2>${ny}년 수입 계획</h2>
     <table class="wn"><thead><tr><th style="width:150px">항목</th><th class="n" style="width:110px">${S.meta.year}년 수입결산</th><th class="n" style="width:120px">${ny}년 수입예산</th><th class="n" style="width:100px">증감</th><th style="width:190px">비고</th><th class="no-print no-ro" style="width:34px"></th></tr></thead><tbody>
     ${incBody(s, nI, xI)}
@@ -1525,6 +1558,7 @@ function vNext(){
       <b>수지 균형</b>
       ${expT===incT&&expT>0?`<span class="badge b-ok">일치 — ${won(expT)}</span>`:`<span class="badge ${expT||incT?'b-no':'b-w'}">지출 ${won(expT)} / 수입 ${won(incT)} · 차액 ${won(incT-expT)}</span>`}
     </div>
+  </div>
   </div>
 
   <div class="card">
