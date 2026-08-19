@@ -29,6 +29,9 @@ header h1{font-size:19px;margin:0;font-weight:700;letter-spacing:-.02em}
 .ttl button.nsave{padding:6px 20px;border-radius:7px;background:#fff;color:var(--accent);
   font-size:13.5px;font-weight:700;border:0;cursor:pointer}
 .ttl button.nsave:hover{background:#eef3f1}
+.ttl #hSave{display:flex;gap:8px}
+.ttl button.nsave.alt{background:rgba(255,255,255,.2);color:#fff;box-shadow:inset 0 0 0 1px rgba(255,255,255,.55)}
+.ttl button.nsave.alt:hover{background:rgba(255,255,255,.34)}
 .hd .sub{font-size:13px;opacity:.9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .hd .st{margin-left:auto;font-size:12px;opacity:.8;white-space:nowrap;flex-shrink:0}
 nav{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none}
@@ -131,6 +134,27 @@ ol.steps small{color:var(--mute);display:block}
 .allprint input,.allprint select,.allprint textarea{
   border:0;background:transparent;padding:2px 4px;pointer-events:none}
 .allsec{margin-top:26px;border-top:2px solid var(--line);padding-top:18px}
+.lg-wrap{min-height:100vh;background:var(--bg);display:flex;align-items:flex-start;justify-content:center;padding:34px 16px}
+.lg-card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:30px 28px;width:100%;max-width:520px}
+.lg-church{font-size:14px;color:var(--mute)}
+.lg-title{font-size:25px;font-weight:700;margin:4px 0 26px;letter-spacing:-.02em;color:var(--accent)}
+.lg-sec{margin-bottom:24px}
+.lg-lbl{font-weight:700;font-size:14px;margin-bottom:10px}
+.lg-btns{display:flex;gap:10px}
+.lg-pick{flex:1;padding:14px;border:1.5px solid var(--line);background:#fff;border-radius:10px;
+  font-size:15px;font-weight:600;color:var(--ink2);cursor:pointer;font-family:inherit}
+.lg-pick:hover{border-color:var(--accent)}
+.lg-pick.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.lg-depts{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:12px}
+.lg-dept{border:1px solid var(--line);border-radius:20px;padding:6px 13px;font-size:13px;cursor:pointer;color:var(--ink2)}
+.lg-dept.on{background:var(--accent-l);border-color:var(--accent);color:var(--accent);font-weight:600}
+.lg-dept input{display:none}
+.lg-name{display:flex;gap:8px;align-items:center}
+.lg-name span{font-size:13.5px;font-weight:600;color:var(--ink2);flex:none}
+.lg-name input{flex:1}
+.lg-ver{text-align:right;font-size:11.5px;color:var(--mute);margin-top:20px}
+.vrow[data-open2]{cursor:pointer}
+.vrow[data-open2]:hover{background:var(--accent-l)}
 .prchk{display:flex;gap:12px;flex-wrap:wrap;align-items:center;flex:1 1 300px}
 .prchk label{display:flex;align-items:center;gap:4px;font-size:13px;cursor:pointer;white-space:nowrap}
 .prchk input{width:auto;flex:none}
@@ -538,6 +562,10 @@ const QK = ['Q1','Q2','Q3','Q4'];
 let S, tab='guide', per='Q1', mfil=0, sortDate=true, editId=null, dirty=false;
 let ro=false, roName='', mine=null, deptList=[], lastAdd=null, srvMsg='';
 let allMode=false;
+let screen='cover';                       // cover(표지) / app(장부)
+let authRole='', authDept='', authName='', curFile='';
+let users=[];                             // 등록된 사용자 {dept,name}
+const DEPTS = ['유아부','유년부','유초등부','청소년부','청년부'];
 let prSel={cover:true,budget:false,ledger:false,settle:false,next:false}, printMode=false, cvOpen=false;
 let openStep=0, openSel='';      // 안내 페이지 · 서버 파일 읽기
 let guideMode='edit';            // 안내 페이지 · 작성 / 열람
@@ -599,7 +627,7 @@ function setStatus(t){ const el=document.getElementById('hSt'); if(el) el.textCo
 window.addEventListener('beforeunload', e=>{ if(dirty){ e.preventDefault(); e.returnValue='' } });
 
 /* ───────── 서버(공유) 저장 ───────── */
-const APPVER = '2026.48';
+const APPVER = '2026.49';
 const LIBKEY = 'church_ledger_lib_v1';
 const DATASHEET = '_data', DATATAG = 'CHURCH_LEDGER_V1';
 const XLSXMIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -769,9 +797,29 @@ async function api(action, body){
   if(!j.ok) throw new Error(j.error||'서버 오류');
   return j;
 }
+const USERKEY='_users';
+async function loadUsers(){
+  if(!serverOn()){ users=[]; return }
+  try{ const j=await api('get',{name:USERKEY, year:0}); users = (j.rec.data&&j.rec.data.list)||[] }
+  catch(e){ users=[] }
+}
+async function saveUsers(){
+  if(!serverOn()){ alert('서버 주소가 설정되지 않았습니다.'); return false }
+  try{ await api('save',{name:USERKEY, year:0, data:{list:users}}); return true }
+  catch(e){ alert('저장하지 못했습니다.\n\n'+(e&&e.message?e.message:e)); return false }
+}
+function okWrite(dept,name){
+  if(!users.length) return true;                       // 등록 전에는 누구나
+  return users.some(u=>u.dept===dept && u.name===name);
+}
+function okView(name){
+  if(!users.length) return true;
+  return users.some(u=>u.name===name);
+}
+
 async function loadDeptList(){
   if(!serverOn()){ deptList=[]; return }
-  try{ const j = await api('list'); deptList = j.list||[] }
+  try{ const j = await api('list'); deptList = (j.list||[]).filter(x=>String(x.name).charAt(0)!=='_') }
   catch(e){ deptList=[] }
 }
 async function srvSave(silent){
@@ -906,6 +954,15 @@ function orphanCount(){
 /* ───────── 렌더 ───────── */
 const TABS = [['guide','안내'],['budget','예산'],['ledger','출납부'],['settle','결산'],['next','새해예산요구'],['data','⚙']];
 function render(){
+  const hd=document.querySelector('header');
+  if(screen==='cover'){
+    if(hd) hd.style.display='none';
+    document.body.classList.remove('viewing');
+    document.getElementById('view').innerHTML = vCover();
+    bindCover();
+    return;
+  }
+  if(hd) hd.style.display='';
   document.getElementById('hTitle').textContent = ro
     ? `${S.meta.year}년 ${roName} 자료열람`
     : `${S.meta.year}년 ${S.meta.dept||'부서'} 회계장부`;
@@ -917,7 +974,8 @@ function render(){
         .map(([k,l])=>`<button data-tab="${k}" class="${tab===k?'on':''}">${l}</button>`).join('')
     ;
   document.getElementById('hSave').innerHTML =
-    (ro||guideMode==='view') ? '' : '<button id="navSave" class="nsave">저장</button>';
+    ((ro||guideMode==='view') ? '' : '<button id="navSave" class="nsave">저장</button>')
+    + '<button id="navExit" class="nsave alt">종료</button>';
 
   const upd = newVer ? `<div class="robar no-print" style="background:#e8f0ed;border-color:#cfe6da;color:#26493f">
       <b>새 버전 ${esc(newVer)}이 나왔습니다.</b>
@@ -927,7 +985,7 @@ function render(){
     ? `<div class="robar no-print" style="display:block">
         <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
           <b>읽기 전용</b>
-          <button class="btn g sm" id="backMine">내 부서로 돌아가기</button>
+          ${authRole==='view'?'':`<button class="btn g sm" id="backMine">내 부서로 돌아가기</button>`}
         </div>
         <div style="margin-top:5px">${ro?`${esc(roName)} 부서의 자료를 열람중입니다.`:'읽을 파일을 선택하세요.'}</div>
       </div>`
@@ -947,6 +1005,8 @@ function render(){
   if($('#fMore')) $('#fMore').onclick=()=>{ formOpen=true; focusType=true; render() };
   const nsv = document.getElementById('navSave');
   if(nsv) nsv.onclick = ()=>{ serverOn()? srvSave() : saveFile() };
+  const nex = document.getElementById('navExit');
+  if(nex) nex.onclick = exitApp;
   document.getElementById('deptFiles').onchange = e=>{ openDeptFiles(e.target.files); e.target.value='' };
   document.getElementById('myFile').onchange = e=>{ if(e.target.files[0]) openMyFile(e.target.files[0]); e.target.value='' };
   bind();
@@ -975,6 +1035,60 @@ function render(){
     }
     lastAdd=null;
   }
+}
+
+/* ── 표지(시작) 화면 ── */
+function vCover(){
+  const listed = authRole ? deptList.filter(x=>authRole==='view' || x.name===authDept) : [];
+  return `<div class="lg-wrap">
+    <div class="lg-card">
+      <div class="lg-church">${esc(S.meta.church||'신대중앙교회')}</div>
+      <h1 class="lg-title">교육부서 회계</h1>
+
+      <div class="lg-sec">
+        <div class="lg-lbl">작업 선택</div>
+        <div class="lg-btns">
+          <button class="lg-pick ${authRole==='write'?'on':''}" data-role="write">출납부 작성</button>
+          <button class="lg-pick ${authRole==='view'?'on':''}" data-role="view">자료 열람</button>
+        </div>
+      </div>
+
+      ${authRole?`
+      <div class="lg-sec">
+        <div class="lg-lbl">누구신가요?</div>
+        <div class="lg-depts">
+          ${DEPTS.map(x=>`<label class="lg-dept ${authDept===x?'on':''}">
+            <input type="radio" name="lgd" data-lgdept="${x}" ${authDept===x?'checked':''}> ${x}</label>`).join('')}
+        </div>
+        <div class="lg-name">
+          <span>이름</span>
+          <input type="text" id="lgName" value="${esc(authName)}" placeholder="이름을 넣으세요">
+          <button class="btn" id="lgGo">확인</button>
+        </div>
+        ${authRole==='view'?`<p class="hint" style="margin:8px 0 0">열람은 이름만 맞으면 됩니다.</p>`:''}
+      </div>` : ''}
+
+      ${authOK()?`
+      <div class="lg-sec">
+        <div class="lg-lbl">파일 선택</div>
+        ${listed.length? `<div class="vlist">
+          ${listed.map(x=>`<div class="vrow" data-open2="${esc(x.name)}|${x.year}">
+            <b>${esc(x.name)}_${x.year}</b>
+            <span class="hint" style="margin:0 0 0 auto">${x.at?new Date(x.at).toLocaleDateString('ko-KR'):'-'}</span>
+          </div>`).join('')}
+          </div>` : `<p class="hint">서버에 저장된 자료가 없습니다.</p>`}
+        <div class="tools" style="margin-top:12px">
+          <button class="btn g sm" id="lgRefresh">목록 새로고침</button>
+          ${authRole==='write'?`<button class="btn g sm" id="lgNew">새로 시작</button>`:''}
+        </div>
+      </div>` : ''}
+      <div class="lg-ver">버전 ${APPVER}</div>
+    </div>
+  </div>`;
+}
+function authOK(){
+  if(!authRole || !authName) return false;
+  return authRole==='view' ? okView(authName) : (authDept && okWrite(authDept, authName));
 }
 
 /* ── 인쇄 묶음 ── */
@@ -1088,6 +1202,11 @@ function viewInfo(){
     <div style="margin-top:12px"><label class="hint" style="margin:0">전년 11월 말 잔고</label>
       <input type="text" class="n" value="${v?won(v.open):(loading?'…':'')}" disabled></div>`;
 }
+function viewInfoOnly(){
+  return viewInfo() + `<div class="opb no-print">
+    <span class="hint" style="margin:0">열람 중인 자료</span>
+    <b style="font-size:13.5px">${curFile? esc(curFile) : (roName||'')}</b></div>`;
+}
 function viewList(){
   const srv = deptList || [];
   if(!serverOn()) return `<p class="hint">서버 주소가 설정되어 있지 않습니다.</p>`;
@@ -1111,6 +1230,13 @@ function viewList(){
 }
 
 /* ── 안내 › 서버에 저장해 둔 내 부서 자료 불러오기 ── */
+function fileBox(){
+  return `<div class="opb no-print">
+    <span class="hint" style="margin:0">읽어 온 자료</span>
+    <b style="font-size:13.5px">${curFile? esc(curFile) : '새로 시작한 장부'}</b>
+    ${authName?`<span class="hint" style="margin:0 0 0 auto">${esc(authRole==='view'?'열람':'작성')} · ${esc(authName)}</span>`:''}
+  </div>`;
+}
 function printBox(){
   const it=[['cover','표지'],['budget','예산'],['ledger','출납부'],['settle','결산'],['next','새해예산요구']];
   const all = it.every(x=>prSel[x[0]]);
@@ -1159,7 +1285,7 @@ function vGuide(){
           : `<span class="seg no-print">
                <button class="on" id="gmEdit">작성</button><button id="gmView">열람</button>
              </span>`}</h2>
-      ${guideMode==='view' ? viewList() : `
+      ${guideMode==='view' ? viewInfoOnly() : `
       <p class="hint">회계기간은 ${S.meta.year}.1.1 ~ ${S.meta.year}.12.31 입니다.</p>
       <div class="row">
         <div class="col" style="min-width:120px"><label class="hint" style="margin:0">회계연도</label><input type="number" data-meta="year" value="${S.meta.year}"></div>
@@ -1173,7 +1299,7 @@ function vGuide(){
       </div>
       <div style="margin-top:12px"><label class="hint" style="margin:0">${S.meta.year-1}년 11월 말 잔고 <span class="badge b-w">전년 12월 시작액</span></label>
         <input type="text" class="n" data-open value="${won(S.openingBalance)}"></div>
-      ${openBox()}
+      ${fileBox()}
       ${printBox()}`}
     </div>
     <div class="col card" id="qrCard" style="flex:1;min-width:250px">
@@ -1778,6 +1904,23 @@ function vData(){
   </div>
 
   <div class="card">
+    <h2>사용자 등록</h2>
+    <p class="hint">여기 등록된 부서·이름만 시작 화면에서 들어올 수 있습니다. 아무도 등록하지 않으면 누구나 들어옵니다.</p>
+    ${users.length? `<table class="wb" style="margin-bottom:12px"><thead><tr><th style="width:110px">부서</th><th>이름</th><th class="c" style="width:44px"></th></tr></thead><tbody>
+      ${users.map((u,i)=>`<tr><td>${esc(u.dept)}</td><td>${esc(u.name)}</td>
+        <td class="c"><button class="btn dg sm" data-udel="${i}">×</button></td></tr>`).join('')}
+      </tbody></table>` : `<p class="hint">아직 등록된 사용자가 없습니다.</p>`}
+    <div class="tools">
+      <select id="uDept" style="width:auto;min-width:110px">${DEPTS.map(x=>`<option>${x}</option>`).join('')}</select>
+      <input type="text" id="uName" placeholder="이름" style="max-width:150px">
+      <button class="btn" id="uAdd">추가</button>
+      <button class="btn g" id="uSave">서버에 저장</button>
+      <button class="btn g" id="uLoad">다시 읽기</button>
+    </div>
+    <p class="hint" style="margin:10px 0 0">추가·삭제한 뒤 <b>서버에 저장</b>을 눌러야 다른 기기에도 적용됩니다.</p>
+  </div>
+
+  <div class="card">
     <h2>프로그램 버전</h2>
     <div class="kv" style="border:0"><span>지금 쓰시는 버전</span><b>${APPVER}${newVer?` → 새 버전 ${esc(newVer)} 있음`:''}</b></div>
     <div class="tools" style="margin-top:12px">
@@ -1878,6 +2021,56 @@ async function shareQR(){
       else await navigator.share({text:shareMsg(), url:(S.meta.url||'').trim()});
     }catch(e){}
   });
+}
+
+function bindCover(){
+  on('[data-role]','click',e=>{ authRole=e.target.dataset.role; render() });
+  on('[data-lgdept]','change',e=>{ authDept=e.target.dataset.lgdept; keepName(); render() });
+  on('[data-lgdept]','click',e=>{ authDept=e.target.dataset.lgdept; keepName(); render() });
+  const nm=$('#lgName');
+  if(nm){
+    nm.oninput=()=>{ authName=nm.value.trim() };
+    nm.onkeydown=ev=>{ if(ev.key==='Enter') tryLogin() };
+  }
+  if($('#lgGo')) $('#lgGo').onclick=tryLogin;
+  if($('#lgRefresh')) $('#lgRefresh').onclick=async()=>{ await loadDeptList(); render() };
+  if($('#lgNew')) $('#lgNew').onclick=()=>{
+    if(!confirm(`${authDept} 장부를 새로 시작합니다. 계속할까요?`)) return;
+    S=norm(fresh()); S.meta.dept=authDept; S.meta.writer=authName; S.meta.church='신대중앙교회';
+    curFile=''; enterApp();
+  };
+  on('[data-open2]','click',async e=>{
+    const el=e.target.closest('[data-open2]'); if(!el) return;
+    const p=el.dataset.open2.split('|');
+    try{
+      const j=await api('get',{name:p[0], year:Number(p[1])});
+      S=norm(j.rec.data); curFile=`${p[0]}_${p[1]}`;
+      if(authRole==='view'){ ro=true; roName=p[0]; guideMode='view' }
+      else { ro=false; guideMode='edit'; if(authName) S.meta.writer=S.meta.writer||authName }
+      enterApp();
+    }catch(err){ alert('불러오지 못했습니다.\n\n'+(err&&err.message?err.message:err)) }
+  });
+}
+function keepName(){ const el=$('#lgName'); if(el) authName=el.value.trim() }
+function tryLogin(){
+  const el=$('#lgName'); if(el) authName=el.value.trim();
+  if(!authName){ alert('이름을 넣으세요.'); return }
+  if(authRole==='write' && !authDept){ alert('부서를 고르세요.'); return }
+  if(!authOK()){
+    alert(authRole==='view' ? '등록된 이름이 아닙니다.' : '부서와 이름이 맞지 않습니다.');
+    return;
+  }
+  render();
+}
+function enterApp(){
+  screen='app'; tab='guide'; per='Q1'; editId=null; srvMsg=''; mine=null;
+  save(); render(); window.scrollTo(0,0);
+}
+function exitApp(){
+  if(dirty && !confirm('저장하지 않은 내용이 있습니다. 그래도 나갈까요?')) return;
+  screen='cover'; ro=false; roName=''; mine=null; guideMode='edit'; srvMsg=''; cvOpen=false;
+  loadDeptList().then(render);
+  render();
 }
 
 function bind(){
@@ -2081,6 +2274,15 @@ function bind(){
   };
   on('[data-lib-read]','click',e=>readDept(e.target.dataset.libRead));
   on('[data-lib-del]','click',e=>{ delete LIB[e.target.dataset.libDel.slice(5)]; saveLib(); render() });
+  if($('#uAdd')) $('#uAdd').onclick=()=>{
+    const dp=$('#uDept').value, nm=($('#uName').value||'').trim();
+    if(!nm){ alert('이름을 넣으세요.'); return }
+    if(users.some(u=>u.dept===dp&&u.name===nm)){ alert('이미 등록되어 있습니다.'); return }
+    users.push({dept:dp,name:nm}); render();
+  };
+  on('[data-udel]','click',e=>{ users.splice(+e.target.dataset.udel,1); render() });
+  if($('#uSave')) $('#uSave').onclick=async()=>{ if(await saveUsers()){ srvMsg='사용자 명단을 서버에 저장했습니다.'; render() } };
+  if($('#uLoad')) $('#uLoad').onclick=async()=>{ await loadUsers(); srvMsg='사용자 명단을 다시 읽었습니다.'; render() };
   if($('#chkUpd')) $('#chkUpd').onclick=()=>checkUpdate(true);
   if($('#doUpd2')) $('#doUpd2').onclick=applyUpdate;
   if($('#sRefresh')) $('#sRefresh').onclick=async()=>{ await loadDeptList(); srvMsg='목록을 새로 읽었습니다.'; render() };
@@ -2316,7 +2518,7 @@ function readOldExcel(wb){
   try{ const l=await store.get(LIBKEY); if(l) LIB=JSON.parse(l)||{} }catch(e){ LIB={} }
   setStatus(serverOn()?'서버 연결됨':'임시 보관됨');
   render();
-  try{ await loadDeptList(); render() }catch(e){}
+  try{ await loadDeptList(); await loadUsers(); render() }catch(e){}
   checkUpdate(false);
   loadXLSX().then(prepShare).catch(function(){});   // 저장·공유가 바로 되도록 미리 준비
 })();
