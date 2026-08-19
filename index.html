@@ -631,7 +631,7 @@ function setStatus(t){ const el=document.getElementById('hSt'); if(el) el.textCo
 window.addEventListener('beforeunload', e=>{ if(dirty){ e.preventDefault(); e.returnValue='' } });
 
 /* ───────── 서버(공유) 저장 ───────── */
-const APPVER = '2026.50';
+const APPVER = '2026.51';
 const LIBKEY = 'church_ledger_lib_v1';
 const DATASHEET = '_data', DATATAG = 'CHURCH_LEDGER_V1';
 const XLSXMIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -1289,12 +1289,7 @@ function vGuide(){
   ${pHead(`${S.meta.year}년 ${S.meta.dept} 회계장부 안내`, `회계기간 ${PERIOD(S.meta.year)}`)}
   <div class="row">
     <div class="col card" style="flex:2;min-width:340px">
-      <h2>기본 정보
-        ${guideMode==='view'
-          ? `<span class="seg no-print"><button class="on">열람</button></span>`
-          : `<span class="seg no-print">
-               <button class="on" id="gmEdit">작성</button><button id="gmView">열람</button>
-             </span>`}</h2>
+      <h2>기본 정보</h2>
       ${guideMode==='view' ? viewInfoOnly() : `
       <p class="hint">회계기간은 ${S.meta.year}.1.1 ~ ${S.meta.year}.12.31 입니다.</p>
       <div class="row">
@@ -2209,13 +2204,6 @@ function bind(){
     const u=(S.meta.url||'').trim();
     if(!u){ alert('먼저 주소를 입력하세요.'); return }
     copyText(u, '주소를 복사했습니다.');
-  };
-  if($('#gmView')) $('#gmView').onclick=async()=>{
-    const pw = prompt('열람 암호를 입력하세요.');
-    if(pw===null) return;                                   // 취소
-    if(String(pw).trim().toUpperCase() !== VIEW_PW){ alert('암호가 맞지 않습니다.'); return }
-    guideMode='view'; openStep=0; prevKey=''; render();
-    if(serverOn()){ await loadDeptList(); render() }
   };
   if($('#vRefresh')) $('#vRefresh').onclick=async()=>{ await loadDeptList(); render() };
   on('[data-prev]','mouseenter',e=>previewDept(e.target.dataset.prev));
