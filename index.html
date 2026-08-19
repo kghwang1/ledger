@@ -593,7 +593,7 @@ function setStatus(t){ const el=document.getElementById('hSt'); if(el) el.textCo
 window.addEventListener('beforeunload', e=>{ if(dirty){ e.preventDefault(); e.returnValue='' } });
 
 /* ───────── 서버(공유) 저장 ───────── */
-const APPVER = '2026.44';
+const APPVER = '2026.45';
 const LIBKEY = 'church_ledger_lib_v1';
 const DATASHEET = '_data', DATATAG = 'CHURCH_LEDGER_V1';
 const XLSXMIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -1004,8 +1004,9 @@ function vPrint(){
   if(prSel.budget) out += `<div class="psec">${stripTools(vBudget())}</div>`;
   if(prSel.ledger){
     formOpen=false; mfil=0; allMode=true;
-    let led = stripTools(vStatus());
-    P.forEach(x=>{ per=x.k; led += `<div class="allsec">${stripTools(vLedger())}</div>` });
+    let led = '';
+    P.forEach((x,i)=>{ per=x.k;
+      led += i===0 ? stripTools(vLedger()) : `<div class="allsec">${stripTools(vLedger())}</div>` });
     out += `<div class="psec">${led}</div>`;
     per=keep; formOpen=keepF; mfil=keepM; allMode=false;
   }
