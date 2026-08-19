@@ -153,6 +153,9 @@ ol.steps small{color:var(--mute);display:block}
 .lg-name span{font-size:13.5px;font-weight:600;color:var(--ink2);flex:none}
 .lg-name input{flex:1}
 .lg-ver{text-align:right;font-size:11.5px;color:var(--mute);margin-top:20px}
+.lg-go{display:flex;align-items:center;gap:12px;margin-top:22px;padding-top:18px;border-top:1px solid var(--line2)}
+.lg-start{margin-left:auto;padding:12px 40px;font-size:16px;border-radius:10px}
+.lg-start:disabled{background:#c9d0cd;cursor:default;filter:none}
 .vrow[data-open2]{cursor:pointer}
 .vrow[data-open2]:hover{background:var(--accent-l)}
 .prchk{display:flex;gap:12px;flex-wrap:wrap;align-items:center;flex:1 1 300px}
@@ -565,7 +568,8 @@ let allMode=false;
 let screen='cover';                       // cover(표지) / app(장부)
 let authRole='', authDept='', authName='', curFile='';
 let users=[];                             // 등록된 사용자 {dept,name}
-const DEPTS = ['유아부','유년부','유초등부','청소년부','청년부'];
+const DEPTS = ['유아부','유년부','유초등부','청소년부','청년부','장년부'];
+let selFile='', cvBusy=true, cvMsg='';
 let prSel={cover:true,budget:false,ledger:false,settle:false,next:false}, printMode=false, cvOpen=false;
 let openStep=0, openSel='';      // 안내 페이지 · 서버 파일 읽기
 let guideMode='edit';            // 안내 페이지 · 작성 / 열람
@@ -627,7 +631,7 @@ function setStatus(t){ const el=document.getElementById('hSt'); if(el) el.textCo
 window.addEventListener('beforeunload', e=>{ if(dirty){ e.preventDefault(); e.returnValue='' } });
 
 /* ───────── 서버(공유) 저장 ───────── */
-const APPVER = '2026.49';
+const APPVER = '2026.50';
 const LIBKEY = 'church_ledger_lib_v1';
 const DATASHEET = '_data', DATATAG = 'CHURCH_LEDGER_V1';
 const XLSXMIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -1071,16 +1075,22 @@ function vCover(){
       ${authOK()?`
       <div class="lg-sec">
         <div class="lg-lbl">파일 선택</div>
-        ${listed.length? `<div class="vlist">
-          ${listed.map(x=>`<div class="vrow" data-open2="${esc(x.name)}|${x.year}">
+        ${cvBusy? `<p class="hint">자료를 불러오는 중입니다…</p>`
+         : listed.length? `<div class="vlist">
+          ${listed.map(x=>{const k=x.name+'|'+x.year; return `<div class="vrow ${selFile===k?'on':''}" data-open2="${esc(k)}">
             <b>${esc(x.name)}_${x.year}</b>
             <span class="hint" style="margin:0 0 0 auto">${x.at?new Date(x.at).toLocaleDateString('ko-KR'):'-'}</span>
-          </div>`).join('')}
-          </div>` : `<p class="hint">서버에 저장된 자료가 없습니다.</p>`}
+          </div>`}).join('')}
+          </div>` : `<p class="hint">서버에 저장된 자료가 없습니다.${authRole==='write'?' 아래 [새로 시작]을 누르세요.':''}</p>`}
         <div class="tools" style="margin-top:12px">
           <button class="btn g sm" id="lgRefresh">목록 새로고침</button>
           ${authRole==='write'?`<button class="btn g sm" id="lgNew">새로 시작</button>`:''}
         </div>
+      </div>
+
+      <div class="lg-go">
+        ${cvMsg?`<span class="hint" style="margin:0">${esc(cvMsg)}</span>`:''}
+        <button class="btn lg-start" id="lgStart" ${selFile?'':'disabled'}>시작</button>
       </div>` : ''}
       <div class="lg-ver">버전 ${APPVER}</div>
     </div>
@@ -2024,32 +2034,43 @@ async function shareQR(){
 }
 
 function bindCover(){
-  on('[data-role]','click',e=>{ authRole=e.target.dataset.role; render() });
+  on('[data-role]','click',e=>{ authRole=e.target.dataset.role; selFile=''; cvMsg=''; render() });
   on('[data-lgdept]','change',e=>{ authDept=e.target.dataset.lgdept; keepName(); render() });
-  on('[data-lgdept]','click',e=>{ authDept=e.target.dataset.lgdept; keepName(); render() });
+  on('[data-lgdept]','click',e=>{ authDept=e.target.dataset.lgdept; selFile=''; keepName(); render() });
   const nm=$('#lgName');
   if(nm){
     nm.oninput=()=>{ authName=nm.value.trim() };
     nm.onkeydown=ev=>{ if(ev.key==='Enter') tryLogin() };
   }
   if($('#lgGo')) $('#lgGo').onclick=tryLogin;
-  if($('#lgRefresh')) $('#lgRefresh').onclick=async()=>{ await loadDeptList(); render() };
+  if($('#lgRefresh')) $('#lgRefresh').onclick=async()=>{
+    cvBusy=true; selFile=''; render();
+    await loadDeptList(); cvBusy=false; render();
+  };
   if($('#lgNew')) $('#lgNew').onclick=()=>{
     if(!confirm(`${authDept} 장부를 새로 시작합니다. 계속할까요?`)) return;
     S=norm(fresh()); S.meta.dept=authDept; S.meta.writer=authName; S.meta.church='신대중앙교회';
     curFile=''; enterApp();
   };
-  on('[data-open2]','click',async e=>{
+  on('[data-open2]','click',e=>{
     const el=e.target.closest('[data-open2]'); if(!el) return;
-    const p=el.dataset.open2.split('|');
+    selFile = el.dataset.open2; cvMsg=''; render();
+  });
+  if($('#lgStart')) $('#lgStart').onclick=async()=>{
+    if(!selFile){ alert('읽을 파일을 고르세요.'); return }
+    const p=selFile.split('|');
+    cvMsg='자료를 읽는 중입니다…'; render();
     try{
       const j=await api('get',{name:p[0], year:Number(p[1])});
       S=norm(j.rec.data); curFile=`${p[0]}_${p[1]}`;
       if(authRole==='view'){ ro=true; roName=p[0]; guideMode='view' }
       else { ro=false; guideMode='edit'; if(authName) S.meta.writer=S.meta.writer||authName }
-      enterApp();
-    }catch(err){ alert('불러오지 못했습니다.\n\n'+(err&&err.message?err.message:err)) }
-  });
+      cvMsg=''; enterApp();
+    }catch(err){
+      cvMsg=''; render();
+      alert('불러오지 못했습니다.\n\n'+(err&&err.message?err.message:err));
+    }
+  };
 }
 function keepName(){ const el=$('#lgName'); if(el) authName=el.value.trim() }
 function tryLogin(){
@@ -2068,7 +2089,7 @@ function enterApp(){
 }
 function exitApp(){
   if(dirty && !confirm('저장하지 않은 내용이 있습니다. 그래도 나갈까요?')) return;
-  screen='cover'; ro=false; roName=''; mine=null; guideMode='edit'; srvMsg=''; cvOpen=false;
+  screen='cover'; ro=false; roName=''; mine=null; guideMode='edit'; srvMsg=''; cvOpen=false; selFile=''; cvMsg='';
   loadDeptList().then(render);
   render();
 }
@@ -2518,7 +2539,8 @@ function readOldExcel(wb){
   try{ const l=await store.get(LIBKEY); if(l) LIB=JSON.parse(l)||{} }catch(e){ LIB={} }
   setStatus(serverOn()?'서버 연결됨':'임시 보관됨');
   render();
-  try{ await loadDeptList(); await loadUsers(); render() }catch(e){}
+  try{ await loadDeptList(); await loadUsers() }catch(e){}
+  cvBusy=false; render();
   checkUpdate(false);
   loadXLSX().then(prepShare).catch(function(){});   // 저장·공유가 바로 되도록 미리 준비
 })();
