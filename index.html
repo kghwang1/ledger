@@ -156,6 +156,7 @@ ol.steps small{color:var(--mute);display:block}
 .lg-go{display:flex;align-items:center;gap:12px;margin-top:22px;padding-top:18px;border-top:1px solid var(--line2)}
 .lg-start{margin-left:auto;padding:12px 40px;font-size:16px;border-radius:10px}
 .lg-start:disabled{background:#c9d0cd;cursor:default;filter:none}
+.lg-busy{color:#c62828;font-weight:600;font-size:13.5px;margin:0}
 .vrow[data-open2]{cursor:pointer}
 .vrow[data-open2]:hover{background:var(--accent-l)}
 .prchk{display:flex;gap:12px;flex-wrap:wrap;align-items:center;flex:1 1 300px}
@@ -631,7 +632,7 @@ function setStatus(t){ const el=document.getElementById('hSt'); if(el) el.textCo
 window.addEventListener('beforeunload', e=>{ if(dirty){ e.preventDefault(); e.returnValue='' } });
 
 /* ───────── 서버(공유) 저장 ───────── */
-const APPVER = '2026.51';
+const APPVER = '2026.53';
 const LIBKEY = 'church_ledger_lib_v1';
 const DATASHEET = '_data', DATATAG = 'CHURCH_LEDGER_V1';
 const XLSXMIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -801,7 +802,19 @@ async function api(action, body){
   if(!j.ok) throw new Error(j.error||'서버 오류');
   return j;
 }
-const USERKEY='_users';
+const USERKEY='_users', CACHEKEY='church_ledger_cache_v1';
+async function saveCache(){
+  try{ await store.set(CACHEKEY, JSON.stringify({depts:deptList, users:users, at:Date.now()})) }catch(e){}
+}
+async function loadCache(){
+  try{
+    const t = await store.get(CACHEKEY); if(!t) return false;
+    const c = JSON.parse(t);
+    if(Array.isArray(c.depts)) deptList = c.depts;
+    if(Array.isArray(c.users)) users = c.users;
+    return !!(c.depts && c.depts.length);
+  }catch(e){ return false }
+}
 async function loadUsers(){
   if(!serverOn()){ users=[]; return }
   try{ const j=await api('get',{name:USERKEY, year:0}); users = (j.rec.data&&j.rec.data.list)||[] }
@@ -833,7 +846,7 @@ async function srvSave(silent){
   setStatus('서버에 저장 중…');
   try{
     await api('save', {name:deptName(), year:S.meta.year, data:S});
-    await loadDeptList();
+    await loadDeptList(); saveCache();
     srvMsg = `${S.meta.year}년 ${deptName()} 자료를 서버에 저장했습니다 · ${nowT()}`;
     setStatus('서버 저장됨 · '+nowT()); render(); return true;
   }catch(e){
@@ -1075,7 +1088,7 @@ function vCover(){
       ${authOK()?`
       <div class="lg-sec">
         <div class="lg-lbl">파일 선택</div>
-        ${cvBusy? `<p class="hint">자료를 불러오는 중입니다…</p>`
+        ${cvBusy? `<p class="lg-busy">자료를 불러오는 중입니다…</p>`
          : listed.length? `<div class="vlist">
           ${listed.map(x=>{const k=x.name+'|'+x.year; return `<div class="vrow ${selFile===k?'on':''}" data-open2="${esc(k)}">
             <b>${esc(x.name)}_${x.year}</b>
@@ -1089,7 +1102,7 @@ function vCover(){
       </div>
 
       <div class="lg-go">
-        ${cvMsg?`<span class="hint" style="margin:0">${esc(cvMsg)}</span>`:''}
+        ${cvMsg?`<span class="lg-busy">${esc(cvMsg)}</span>`:''}
         <button class="btn lg-start" id="lgStart" ${selFile?'':'disabled'}>시작</button>
       </div>` : ''}
       <div class="lg-ver">버전 ${APPVER}</div>
@@ -2040,7 +2053,8 @@ function bindCover(){
   if($('#lgGo')) $('#lgGo').onclick=tryLogin;
   if($('#lgRefresh')) $('#lgRefresh').onclick=async()=>{
     cvBusy=true; selFile=''; render();
-    await loadDeptList(); cvBusy=false; render();
+    await Promise.all([loadDeptList(), loadUsers()]);
+    await saveCache(); cvBusy=false; render();
   };
   if($('#lgNew')) $('#lgNew').onclick=()=>{
     if(!confirm(`${authDept} 장부를 새로 시작합니다. 계속할까요?`)) return;
@@ -2527,7 +2541,12 @@ function readOldExcel(wb){
   try{ const l=await store.get(LIBKEY); if(l) LIB=JSON.parse(l)||{} }catch(e){ LIB={} }
   setStatus(serverOn()?'서버 연결됨':'임시 보관됨');
   render();
-  try{ await loadDeptList(); await loadUsers() }catch(e){}
+  const had = await loadCache();            // 지난번 목록을 먼저 보여 준다
+  if(had){ cvBusy=false; render() }
+  try{
+    await Promise.all([loadDeptList(), loadUsers()]);   // 두 요청을 겹쳐 보낸다
+    await saveCache();
+  }catch(e){}
   cvBusy=false; render();
   checkUpdate(false);
   loadXLSX().then(prepShare).catch(function(){});   // 저장·공유가 바로 되도록 미리 준비
