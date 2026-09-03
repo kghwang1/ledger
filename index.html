@@ -647,7 +647,7 @@ function setStatus(t){ const el=document.getElementById('hSt'); if(el) el.textCo
 window.addEventListener('beforeunload', e=>{ if(dirty){ e.preventDefault(); e.returnValue='' } });
 
 /* ───────── 서버(공유) 저장 ───────── */
-const APPVER = '2026.60';
+const APPVER = '2026.61';
 const LIBKEY = 'church_ledger_lib_v1';
 const DATASHEET = '_data', DATATAG = 'CHURCH_LEDGER_V1';
 const XLSXMIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -995,14 +995,21 @@ function cumSum(uptoK,cat){
 }
 function catAmt(k,it,isExp){ const v=catSum(k,it); return isExp? -v : v }
 function cumAmt(k,it,isExp){ const v=cumSum(k,it); return isExp? -v : v }
+function carryIdx(){                     // 이월금 항목이 몇 번째인지 (없으면 -1)
+  return S.incomeItems.findIndex(it=>/이월/.test(String(it.name)));
+}
+function incOther(){                     // 이월금을 뺀 나머지 수입 항목
+  const ci=carryIdx();
+  return S.incomeItems.filter((it,i)=>i!==ci);
+}
 function settle(){
-  const carry = closing('DEC');
+  const carry = closing('DEC'), ci = carryIdx();
   const inc = S.incomeItems.map((it,i)=>({
     name:it.name, budget:it.budget,
-    actual: i===0 ? carry : cumSum('Q4',it.name)
+    actual: i===ci ? carry : cumSum('Q4',it.name)
   }));
   const exp = S.expenseItems.map(it=>({name:it.name,budget:it.budget,actual:-cumSum('Q4',it.name)}));
-  const incT = inc.reduce((s,x)=>s+x.actual,0);
+  const incT = inc.reduce((s,x)=>s+x.actual,0) + (ci<0 ? carry : 0);
   const expT = exp.reduce((s,x)=>s+x.actual,0);
   const incB = inc.reduce((s,x)=>s+x.budget,0);
   const expB = exp.reduce((s,x)=>s+x.budget,0);
@@ -1521,7 +1528,7 @@ function vStatus(){
   const incAll = rows.reduce((t,r)=>t+r.inc,0), expAll = rows.reduce((t,r)=>t+r.exp,0);
   const aid = S.incomeItems.find(i=>/교회보조|보조금|지원금/.test(i.name));
   const aidGot = aid ? cumSum('Q4', aid.name) : 0;
-  const incEtc = S.incomeItems.slice(1)                      // 이월금·교회지원금을 뺀 나머지 수입
+  const incEtc = incOther()                                  // 이월금·교회지원금을 뺀 나머지 수입
     .filter(i=>!aid || i.name!==aid.name)
     .reduce((t,i)=>t+cumSum('Q4', i.name), 0);
   return `
@@ -1691,15 +1698,15 @@ function itemPanel(k){
     const s=catAmt(k,it.name,ex), c=isQ?cumAmt(k,it.name,ex):null;
     return `<tr><td>${esc(it.name)}</td><td class="n ${s?cls:''}">${s?won(s):'-'}</td>${isQ?`<td class="n">${c?won(c):'-'}</td>`:''}</tr>`;
   }).join('');
-  const si=S.incomeItems.slice(1).reduce((s,i)=>s+catAmt(k,i.name,false),0);
+  const si=incOther().reduce((s,i)=>s+catAmt(k,i.name,false),0);
   const se=S.expenseItems.reduce((s,i)=>s+catAmt(k,i.name,true),0);
   return `<div class="card" style="margin-top:16px">
     <h2 style="font-size:14px">항목별 소계</h2>
     <div class="row two">
       <div class="col">
         <table><thead><tr><th>수입</th><th class="n">소계</th>${isQ?'<th class="n">누계</th>':''}</tr></thead><tbody>
-        ${r(S.incomeItems.slice(1),'in',false)}
-        <tr class="sub"><td>계</td><td class="n">${won(si)}</td>${isQ?`<td class="n">${won(S.incomeItems.slice(1).reduce((s,i)=>s+cumAmt(k,i.name,false),0))}</td>`:''}</tr>
+        ${r(incOther(),'in',false)}
+        <tr class="sub"><td>계</td><td class="n">${won(si)}</td>${isQ?`<td class="n">${won(incOther().reduce((s,i)=>s+cumAmt(k,i.name,false),0))}</td>`:''}</tr>
         </tbody></table>
       </div>
       <div class="col">
@@ -1777,7 +1784,7 @@ function vSettle(){
       <div class="col">
         <h2 style="font-size:14px">수입 결산</h2>
         <table class="we"><thead><tr><th style="width:110px">항목</th><th class="n">예산</th><th class="n">수입</th><th class="n">증감</th></tr></thead><tbody>
-        ${s.inc.map((x,i)=>`<tr><td>${esc(x.name)}${i===0?` <span class="hint" style="display:inline">(${S.meta.year-1}년 12월 정산 잔고)</span>`:''}</td>
+        ${s.inc.map((x,i)=>`<tr><td>${esc(x.name)}${i===carryIdx()?` <span class="hint" style="display:inline">(${S.meta.year-1}년 12월 정산 잔고)</span>`:''}</td>
           <td class="n">${won(x.budget)}</td><td class="n">${won(x.actual)}</td>
           <td class="n ${x.actual-x.budget<0?'out':''}">${won(x.actual-x.budget)}</td></tr>`).join('')}
         <tr class="tot"><td>소계</td><td class="n">${won(s.incB)}</td><td class="n">${won(s.incT)}</td><td class="n">${won(s.incT-s.incB)}</td></tr>
@@ -2472,7 +2479,7 @@ function buildWB(){
     sorted(p.k).forEach(e=>{ bal+=sgn(e); a.push([e.type,e.cat,e.date,sgn(e),e.note,bal]) });
     a.push([`${pLabel(p)} 잔고`,'','',net(p.k),'',closing(p.k)]);
     a.push([],['항목별 소계'],['구분','항목','소계','누계']);
-    S.incomeItems.slice(1).forEach(i=>a.push(['수입',i.name,catAmt(p.k,i.name,false),p.k==='DEC'?'':cumAmt(p.k,i.name,false)]));
+    incOther().forEach(i=>a.push(['수입',i.name,catAmt(p.k,i.name,false),p.k==='DEC'?'':cumAmt(p.k,i.name,false)]));
     S.expenseItems.forEach(i=>a.push(['지출',i.name,catAmt(p.k,i.name,true),p.k==='DEC'?'':cumAmt(p.k,i.name,true)]));
     A(a,pLabel(p));
   });
