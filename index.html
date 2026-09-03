@@ -585,7 +585,7 @@ let users=[];                             // 등록된 사용자 {dept,name}
 const DEPT_DEF = ['영유아부','유치부','유년부','초등부','청소년부','청년부','장년부','coffee'];
 let depts = DEPT_DEF.slice();                      // 서버에 저장되는 부서 목록
 let noView = ['coffee'];                           // 열람을 쓸 수 없는 부서
-let homes = [], homePw = '';                       // 가계부 구분 목록·암호
+let homes = ['카페'], homePw = '';                 // 가계부 구분 목록·암호
 let selFile='', cvBusy=true, cvMsg='';
 let prSel={cover:true,budget:false,ledger:false,settle:false,next:false}, printMode=false, cvOpen=false;
 let openStep=0, openSel='';      // 안내 페이지 · 서버 파일 읽기
@@ -649,7 +649,7 @@ function setStatus(t){ const el=document.getElementById('hSt'); if(el) el.textCo
 window.addEventListener('beforeunload', e=>{ if(dirty){ e.preventDefault(); e.returnValue='' } });
 
 /* ───────── 서버(공유) 저장 ───────── */
-const APPVER = '2026.65';
+const APPVER = '2026.66';
 const LIBKEY = 'church_ledger_lib_v1';
 const DATASHEET = '_data', DATATAG = 'CHURCH_LEDGER_V1';
 const XLSXMIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -848,7 +848,7 @@ async function loadCache(){
     if(Array.isArray(c.users)) users = c.users;
     if(Array.isArray(c.deptNames) && c.deptNames.length) depts = c.deptNames;
     if(Array.isArray(c.noView)) noView = c.noView;
-    if(Array.isArray(c.homes)) homes = c.homes;
+    if(Array.isArray(c.homes) && c.homes.length) homes = c.homes;
     if(typeof c.homePw==='string') homePw = c.homePw;
     return !!(c.depts && c.depts.length);
   }catch(e){ return false }
@@ -861,7 +861,7 @@ async function loadUsers(){
     users = d.list||[];
     if(Array.isArray(d.depts) && d.depts.length) depts = d.depts.slice();
     if(Array.isArray(d.noView)) noView = d.noView.slice();
-    if(Array.isArray(d.homes)) homes = d.homes.slice();
+    if(Array.isArray(d.homes) && d.homes.length) homes = d.homes.slice();
     if(typeof d.homePw === 'string') homePw = d.homePw;
   }catch(e){ users=[] }
 }
