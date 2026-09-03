@@ -152,7 +152,12 @@ ol.steps small{color:var(--mute);display:block}
 .lg-name{display:flex;gap:8px;align-items:center}
 .lg-name span{font-size:13.5px;font-weight:600;color:var(--ink2);flex:none}
 .lg-name input{flex:1}
-.lg-ver{text-align:right;font-size:11.5px;color:var(--mute);margin-top:20px}
+.lg-ver{text-align:right;font-size:11.5px;color:var(--mute);margin-top:14px}
+.lg-qr{display:flex;gap:16px;align-items:center;margin-top:24px;padding-top:18px;border-top:1px solid var(--line2)}
+.lg-qrbox{border:1px solid var(--line);border-radius:8px;padding:6px;flex:none;background:#fff}
+.lg-qrtxt{min-width:0}
+.lg-qrtxt b{font-size:13.5px}
+.lg-qrurl{font-size:12px;color:var(--accent);word-break:break-all;margin:4px 0 8px}
 .lg-go{display:flex;align-items:center;gap:12px;margin-top:22px;padding-top:18px;border-top:1px solid var(--line2)}
 .lg-start{margin-left:auto;padding:12px 40px;font-size:16px;border-radius:10px}
 .lg-start:disabled{background:#c9d0cd;cursor:default;filter:none}
@@ -642,7 +647,7 @@ function setStatus(t){ const el=document.getElementById('hSt'); if(el) el.textCo
 window.addEventListener('beforeunload', e=>{ if(dirty){ e.preventDefault(); e.returnValue='' } });
 
 /* ───────── 서버(공유) 저장 ───────── */
-const APPVER = '2026.57';
+const APPVER = '2026.58';
 const LIBKEY = 'church_ledger_lib_v1';
 const DATASHEET = '_data', DATATAG = 'CHURCH_LEDGER_V1';
 const XLSXMIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -1128,6 +1133,14 @@ function vCover(){
         ${cvMsg?`<span class="lg-busy">${esc(cvMsg)}</span>`:''}
         <button class="btn lg-start" id="lgStart" ${selFile?'':'disabled'}>시작</button>
       </div>` : ''}
+      ${qrSvg(140)?`<div class="lg-qr">
+        <div class="lg-qrbox">${qrSvg(140)}</div>
+        <div class="lg-qrtxt">
+          <b>프로그램 주소</b>
+          <div class="lg-qrurl">${esc(serverUrlHome())}</div>
+          <button class="btn g sm" id="lgCopy">주소 복사</button>
+        </div>
+      </div>`:''}
       <div class="lg-ver">버전 ${APPVER}</div>
     </div>
   </div>`;
@@ -1998,6 +2011,17 @@ function qrMatrix(){
   if(!u) return null;
   try{ return QR.build(u) }catch(e){ return 'ERR' }
 }
+function serverUrlHome(){ return String((S.meta&&S.meta.url)||HOME_URL||'').trim() }
+function qrSvg(px){
+  const u = serverUrlHome();
+  if(!u) return '';
+  let m; try{ m = QR.build(u) }catch(e){ return '' }
+  const n=m.length, q=4, t=n+q*2;
+  let dpath='';
+  for(let y=0;y<n;y++) for(let x=0;x<n;x++) if(m[y][x]) dpath+=`M${x+q} ${y+q}h1v1h-1z`;
+  return `<svg width="${px}" height="${px}" viewBox="0 0 ${t} ${t}" xmlns="http://www.w3.org/2000/svg"
+    style="background:#fff;display:block"><path d="${dpath}" fill="#111"/></svg>`;
+}
 function drawQR(){
   const box=document.getElementById('qrBox'); if(!box) return;
   const m=qrMatrix();
@@ -2088,6 +2112,7 @@ function bindCover(){
     nm.onkeydown=ev=>{ if(ev.key==='Enter') tryLogin() };
   }
   if($('#lgGo')) $('#lgGo').onclick=tryLogin;
+  if($('#lgCopy')) $('#lgCopy').onclick=()=>copyText(serverUrlHome(),'주소를 복사했습니다.');
   if($('#lgRefresh')) $('#lgRefresh').onclick=async()=>{
     cvBusy=true; selFile=''; render();
     await Promise.all([loadDeptList(), loadUsers()]);
