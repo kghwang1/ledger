@@ -157,6 +157,14 @@ ol.steps small{color:var(--mute);display:block}
 .lg-start{margin-left:auto;padding:12px 40px;font-size:16px;border-radius:10px}
 .lg-start:disabled{background:#c9d0cd;cursor:default;filter:none}
 .lg-busy{color:#c62828;font-weight:600;font-size:13.5px;margin:0}
+.dchips{display:flex;gap:7px;flex-wrap:wrap}
+.dchip{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line);
+  border-radius:20px;padding:5px 8px 5px 13px;font-size:13px;color:var(--ink2);background:#fff}
+.dchip button{border:0;background:none;color:var(--out);cursor:pointer;font-size:14px;line-height:1;padding:0 2px}
+.dchip button.dv{font-size:11px;font-weight:600;color:var(--in);background:var(--in-bg);
+  border-radius:10px;padding:2px 7px}
+.dchip.nv{color:var(--mute)}
+.dchip.nv button.dv{color:var(--out);background:var(--out-bg)}
 .vrow[data-open2]{cursor:pointer}
 .vrow[data-open2]:hover{background:var(--accent-l)}
 .prchk{display:flex;gap:12px;flex-wrap:wrap;align-items:center;flex:1 1 300px}
@@ -569,7 +577,9 @@ let allMode=false;
 let screen='cover';                       // cover(표지) / app(장부)
 let authRole='', authDept='', authName='', curFile='';
 let users=[];                             // 등록된 사용자 {dept,name}
-const DEPTS = ['영유아부','유치부','유년부','초등부','청소년부','청년부','장년부'];
+const DEPT_DEF = ['영유아부','유치부','유년부','초등부','청소년부','청년부','장년부','coffee'];
+let depts = DEPT_DEF.slice();                      // 서버에 저장되는 부서 목록
+let noView = ['coffee'];                           // 열람을 쓸 수 없는 부서
 let selFile='', cvBusy=true, cvMsg='';
 let prSel={cover:true,budget:false,ledger:false,settle:false,next:false}, printMode=false, cvOpen=false;
 let openStep=0, openSel='';      // 안내 페이지 · 서버 파일 읽기
@@ -632,7 +642,7 @@ function setStatus(t){ const el=document.getElementById('hSt'); if(el) el.textCo
 window.addEventListener('beforeunload', e=>{ if(dirty){ e.preventDefault(); e.returnValue='' } });
 
 /* ───────── 서버(공유) 저장 ───────── */
-const APPVER = '2026.55';
+const APPVER = '2026.57';
 const LIBKEY = 'church_ledger_lib_v1';
 const DATASHEET = '_data', DATATAG = 'CHURCH_LEDGER_V1';
 const XLSXMIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -804,7 +814,7 @@ async function api(action, body){
 }
 const USERKEY='_users', CACHEKEY='church_ledger_cache_v1';
 async function saveCache(){
-  try{ await store.set(CACHEKEY, JSON.stringify({depts:deptList, users:users, at:Date.now()})) }catch(e){}
+  try{ await store.set(CACHEKEY, JSON.stringify({depts:deptList, users:users, deptNames:depts, noView:noView, at:Date.now()})) }catch(e){}
 }
 async function loadCache(){
   try{
@@ -812,17 +822,24 @@ async function loadCache(){
     const c = JSON.parse(t);
     if(Array.isArray(c.depts)) deptList = c.depts;
     if(Array.isArray(c.users)) users = c.users;
+    if(Array.isArray(c.deptNames) && c.deptNames.length) depts = c.deptNames;
+    if(Array.isArray(c.noView)) noView = c.noView;
     return !!(c.depts && c.depts.length);
   }catch(e){ return false }
 }
 async function loadUsers(){
   if(!serverOn()){ users=[]; return }
-  try{ const j=await api('get',{name:USERKEY, year:0}); users = (j.rec.data&&j.rec.data.list)||[] }
-  catch(e){ users=[] }
+  try{
+    const j=await api('get',{name:USERKEY, year:0});
+    const d=j.rec.data||{};
+    users = d.list||[];
+    if(Array.isArray(d.depts) && d.depts.length) depts = d.depts.slice();
+    if(Array.isArray(d.noView)) noView = d.noView.slice();
+  }catch(e){ users=[] }
 }
 async function saveUsers(){
   if(!serverOn()){ alert('서버 주소가 설정되지 않았습니다.'); return false }
-  try{ await api('save',{name:USERKEY, year:0, data:{list:users}}); return true }
+  try{ await api('save',{name:USERKEY, year:0, data:{list:users, depts:depts, noView:noView}}); return true }
   catch(e){ alert('저장하지 못했습니다.\n\n'+(e&&e.message?e.message:e)); return false }
 }
 function okWrite(dept,name){
@@ -831,7 +848,13 @@ function okWrite(dept,name){
 }
 function okView(name){
   if(!users.length) return true;
-  return users.some(u=>u.name===name);
+  const mine = users.filter(u=>u.name===name);
+  if(!mine.length) return false;
+  return mine.some(u=>noView.indexOf(u.dept)<0);      // 열람 금지 부서만 있으면 막는다
+}
+function viewBanned(name){
+  const mine = users.filter(u=>u.name===name);
+  return mine.length>0 && mine.every(u=>noView.indexOf(u.dept)>=0);
 }
 
 async function loadDeptList(){
@@ -1074,7 +1097,7 @@ function vCover(){
       <div class="lg-sec">
         <div class="lg-lbl">누구신가요?</div>
         <div class="lg-depts">
-          ${DEPTS.map(x=>`<label class="lg-dept ${authDept===x?'on':''}">
+          ${depts.map(x=>`<label class="lg-dept ${authDept===x?'on':''}">
             <input type="radio" name="lgd" data-lgdept="${x}" ${authDept===x?'checked':''}> ${x}</label>`).join('')}
         </div>
         <div class="lg-name">
@@ -1922,20 +1945,34 @@ function vData(){
   </div>
 
   <div class="card">
+    <h2>부서 등록</h2>
+    <p class="hint">시작 화면에 나오는 부서 목록입니다. <b>열람</b>을 눌러 그 부서가 다른 부서 자료를 볼 수 있는지 정합니다. 부서를 지워도 이미 등록된 사용자는 남습니다.</p>
+    <div class="dchips">
+      ${depts.map((x,i)=>{const nv=noView.indexOf(x)>=0; return `<span class="dchip ${nv?'nv':''}">${esc(x)}<button class="dv" data-dview="${esc(x)}" title="${nv?'열람 못 함 — 눌러서 허용':'열람 가능 — 눌러서 막기'}">${nv?'열람✕':'열람'}</button><button data-ddel="${i}" title="지우기">×</button></span>`}).join('')}
+      ${depts.length?'':'<span class="hint">부서가 없습니다. 아래에서 넣으세요.</span>'}
+    </div>
+    <div class="tools" style="margin-top:10px">
+      <input type="text" id="dName" placeholder="부서 이름" style="max-width:170px">
+      <button class="btn" id="dAdd">부서 추가</button>
+      <button class="btn g" id="dReset">기본 목록으로</button>
+    </div>
+  </div>
+
+  <div class="card">
     <h2>사용자 등록</h2>
     <p class="hint">여기 등록된 부서·이름만 시작 화면에서 들어올 수 있습니다. 아무도 등록하지 않으면 누구나 들어옵니다.</p>
     ${users.length? `<table class="wb" style="margin-bottom:12px"><thead><tr><th style="width:110px">부서</th><th>이름</th><th class="c" style="width:44px"></th></tr></thead><tbody>
-      ${users.map((u,i)=>`<tr><td>${esc(u.dept)}</td><td>${esc(u.name)}</td>
+      ${users.map((u,i)=>`<tr><td>${esc(u.dept)}${depts.indexOf(u.dept)<0?' <span class="badge b-w">없는 부서</span>':''}</td><td>${esc(u.name)}</td>
         <td class="c"><button class="btn dg sm" data-udel="${i}">×</button></td></tr>`).join('')}
       </tbody></table>` : `<p class="hint">아직 등록된 사용자가 없습니다.</p>`}
     <div class="tools">
-      <select id="uDept" style="width:auto;min-width:110px">${DEPTS.map(x=>`<option>${x}</option>`).join('')}</select>
+      <select id="uDept" style="width:auto;min-width:110px">${depts.map(x=>`<option>${x}</option>`).join('')}</select>
       <input type="text" id="uName" placeholder="이름" style="max-width:150px">
       <button class="btn" id="uAdd">추가</button>
       <button class="btn g" id="uSave">서버에 저장</button>
       <button class="btn g" id="uLoad">다시 읽기</button>
     </div>
-    <p class="hint" style="margin:10px 0 0">추가·삭제한 뒤 <b>서버에 저장</b>을 눌러야 다른 기기에도 적용됩니다.</p>
+    <p class="hint" style="margin:10px 0 0">부서·사용자를 고친 뒤 <b>서버에 저장</b>을 눌러야 다른 기기에도 적용됩니다.</p>
   </div>
 
   <div class="card">
@@ -2087,7 +2124,9 @@ function tryLogin(){
   if(!authName){ alert('이름을 넣으세요.'); return }
   if(authRole==='write' && !authDept){ alert('부서를 고르세요.'); return }
   if(!authOK()){
-    alert(authRole==='view' ? '등록된 이름이 아닙니다.' : '부서와 이름이 맞지 않습니다.');
+    alert(authRole==='view'
+      ? (viewBanned(authName) ? '이 이름은 자료 열람을 쓸 수 없습니다.' : '등록된 이름이 아닙니다.')
+      : '부서와 이름이 맞지 않습니다.');
     return;
   }
   render();
@@ -2297,6 +2336,27 @@ function bind(){
   };
   on('[data-lib-read]','click',e=>readDept(e.target.dataset.libRead));
   on('[data-lib-del]','click',e=>{ delete LIB[e.target.dataset.libDel.slice(5)]; saveLib(); render() });
+  if($('#dAdd')) $('#dAdd').onclick=()=>{
+    const nm=($('#dName').value||'').trim();
+    if(!nm){ alert('부서 이름을 넣으세요.'); return }
+    if(depts.indexOf(nm)>=0){ alert('이미 있는 부서입니다.'); return }
+    depts.push(nm); render();
+  };
+  const dn=$('#dName'); if(dn) dn.onkeydown=ev=>{ if(ev.key==='Enter') $('#dAdd').click() };
+  on('[data-dview]','click',e=>{
+    const nm=e.target.dataset.dview, i=noView.indexOf(nm);
+    if(i>=0) noView.splice(i,1); else noView.push(nm);
+    render();
+  });
+  on('[data-ddel]','click',e=>{
+    const i=+e.target.dataset.ddel, nm=depts[i];
+    if(users.some(u=>u.dept===nm) && !confirm(`${nm}로 등록된 사용자가 있습니다. 그래도 부서를 지울까요?`)) return;
+    depts.splice(i,1); render();
+  });
+  if($('#dReset')) $('#dReset').onclick=()=>{
+    if(!confirm('부서 목록을 기본 상태로 되돌립니다. 계속할까요?')) return;
+    depts = DEPT_DEF.slice(); noView = ['coffee']; render();
+  };
   if($('#uAdd')) $('#uAdd').onclick=()=>{
     const dp=$('#uDept').value, nm=($('#uName').value||'').trim();
     if(!nm){ alert('이름을 넣으세요.'); return }
@@ -2304,8 +2364,8 @@ function bind(){
     users.push({dept:dp,name:nm}); render();
   };
   on('[data-udel]','click',e=>{ users.splice(+e.target.dataset.udel,1); render() });
-  if($('#uSave')) $('#uSave').onclick=async()=>{ if(await saveUsers()){ srvMsg='사용자 명단을 서버에 저장했습니다.'; render() } };
-  if($('#uLoad')) $('#uLoad').onclick=async()=>{ await loadUsers(); srvMsg='사용자 명단을 다시 읽었습니다.'; render() };
+  if($('#uSave')) $('#uSave').onclick=async()=>{ if(await saveUsers()){ srvMsg='부서·사용자 명단을 서버에 저장했습니다.'; render() } };
+  if($('#uLoad')) $('#uLoad').onclick=async()=>{ await loadUsers(); srvMsg='부서·사용자 명단을 다시 읽었습니다.'; render() };
   if($('#chkUpd')) $('#chkUpd').onclick=()=>checkUpdate(true);
   if($('#doUpd2')) $('#doUpd2').onclick=applyUpdate;
   if($('#sRefresh')) $('#sRefresh').onclick=async()=>{ await loadDeptList(); srvMsg='목록을 새로 읽었습니다.'; render() };
