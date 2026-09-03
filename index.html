@@ -597,7 +597,7 @@ let quotaWarned=false;
 
 function uid(){ return Math.random().toString(36).slice(2,9) }
 function fresh(){
-  return {meta:{year:new Date().getFullYear(),dept:'',church:'',url:'',server:'',serverKey:'',writer:'',leader:''},cover:{},openingBalance:0,
+  return {meta:{year:new Date().getFullYear(),dept:'',church:'',url:'',server:'',serverKey:'',writer:'',leader:''},cover:{},plan:[],openingBalance:0,
     incomeItems:[{name:'이월금',budget:0}],expenseItems:[],
     entries:{DEC:[],Q1:[],Q2:[],Q3:[],Q4:[]},
     nextYear:{expense:{},income:{},basis:{},extraExp:[],extraInc:[],dec:0,note:''}};
@@ -606,6 +606,7 @@ function norm(s){
   s = Object.assign(fresh(), s||{});
   s.meta = Object.assign({year:2026,dept:'',church:'',url:'',server:'',serverKey:'',writer:'',leader:''}, s.meta);
   s.cover = Object.assign({headTop:25, bodyTop:33, submit:'', close:'', files:''}, s.cover);
+  s.plan = (s.plan||[]).map(e=>Object.assign({id:uid(),cat:'',date:'',amount:0,note:'',img:''},e));
   if(!String(s.meta.url||'').trim()) s.meta.url = HOME_URL;   // 배포 주소 기본값
   s.nextYear = Object.assign({expense:{},income:{},basis:{},extraExp:[],extraInc:[],dec:0,note:''}, s.nextYear);
   s.nextYear.extraExp = (s.nextYear.extraExp||[]).map(x=>({name:x.name||'',amt:+x.amt||0,basis:x.basis||''}));
@@ -647,7 +648,7 @@ function setStatus(t){ const el=document.getElementById('hSt'); if(el) el.textCo
 window.addEventListener('beforeunload', e=>{ if(dirty){ e.preventDefault(); e.returnValue='' } });
 
 /* ───────── 서버(공유) 저장 ───────── */
-const APPVER = '2026.61';
+const APPVER = '2026.63';
 const LIBKEY = 'church_ledger_lib_v1';
 const DATASHEET = '_data', DATATAG = 'CHURCH_LEDGER_V1';
 const XLSXMIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -1023,7 +1024,7 @@ function orphanCount(){
 }
 
 /* ───────── 렌더 ───────── */
-const TABS = [['guide','안내'],['budget','예산'],['ledger','출납부'],['settle','결산'],['next','새해예산요구'],['data','⚙']];
+const TABS = [['guide','안내'],['budget','예산'],['ledger','출납부'],['settle','결산'],['next','새해예산요구'],['plan','지출예정'],['data','⚙']];
 function render(){
   const hd=document.querySelector('header');
   if(screen==='cover'){
@@ -1063,9 +1064,10 @@ function render(){
     : (srvMsg? `<div class="robar no-print" style="background:var(--in-bg);border-color:#cfe6da;color:#1d6b4f">${esc(srvMsg)}</div>`:'');
 
   document.getElementById('view').innerHTML = upd + banner +
-    ({guide:vGuide,budget:vBudget,ledger:vLedger,settle:vSettle,next:vNext,data:vData,browse:vBrowse,print:vPrint})[tab]();
+    ({guide:vGuide,budget:vBudget,ledger:vLedger,settle:vSettle,next:vNext,plan:vPlan,data:vData,browse:vBrowse,print:vPrint})[tab]();
   document.querySelectorAll('#nav button[data-tab]').forEach(b=>b.onclick=()=>{
     const k=b.dataset.tab;
+    if(k==='plan' && tab!=='plan'){ planEdit=null; planImg=''; planDraft=null; planOpen=true }
     if(k==='ledger' && tab!=='ledger'){                 // 출납부를 열면 오늘 날짜의 분기·달로
       const t=todayPeriod();
       if(t){ per=t.k; mfil=t.m } 
@@ -1074,6 +1076,52 @@ function render(){
     tab=k; render(); window.scrollTo(0,0);
   });
   if($('#fMore')) $('#fMore').onclick=()=>{ formOpen=true; focusType=true; render() };
+
+  /* ── 지출예정 ── */
+  if($('#plMore')) $('#plMore').onclick=()=>{ planOpen=true; render(); const el=$('#plCat'); if(el) el.focus() };
+  const pc=$('#plCat');
+  if(pc){
+    const cur = planEdit ? ((S.plan||[]).find(x=>x.id===planEdit)||{}).cat
+                         : (planDraft? planDraft.cat : null);
+    pc.innerHTML = S.expenseItems.length
+      ? S.expenseItems.map(i=>`<option ${i.name===cur?'selected':''}>${esc(i.name)}</option>`).join('')
+      : '<option value="">예산 탭에서 지출 항목을 먼저 등록하세요</option>';
+    const snapPlan=()=>{ planDraft={cat:pc.value, date:$('#plDate').value, amt:$('#plAmt').value, note:$('#plNote').value} };
+    const addPlan=()=>{
+      const cat=pc.value, amt=num($('#plAmt').value);
+      if(!cat){ alert('예산 탭에서 지출 항목을 먼저 등록하세요.'); return }
+      if(!amt){ alert('금액을 넣어 주세요.'); $('#plAmt').focus(); return }
+      const iso = parseDate($('#plDate').value, S.meta.year);
+      const rec={cat, date:iso, amount:Math.abs(amt), note:$('#plNote').value.trim(), img:planImg||''};
+      if(planEdit){ const i=(S.plan||[]).findIndex(x=>x.id===planEdit);
+        S.plan[i]=Object.assign({id:planEdit},rec); planAdd=planEdit; planEdit=null }
+      else { const id=uid(); S.plan.push(Object.assign({id},rec)); planAdd=id }
+      planImg=''; planDraft=null; planOpen=false;
+      try{ if(document.activeElement && document.activeElement.blur) document.activeElement.blur() }catch(e){}
+      save(); render();
+    };
+    $('#plAdd').onclick=addPlan;
+    ['plAmt','plNote','plDate'].forEach(id=>{ const el=$('#'+id); if(el) el.onkeydown=ev=>{ if(ev.key==='Enter') addPlan() } });
+    const pd=$('#plDate');
+    if(pd) pd.onblur=()=>{ const iso=parseDate(pd.value, S.meta.year); if(iso) pd.value=fmtDate(iso) };
+    if($('#plCancel')) $('#plCancel').onclick=()=>{ planEdit=null; planImg=''; planDraft=null; render() };
+    if($('#plPic')) $('#plPic').onclick=()=>$('#plPicIn').click();
+    if($('#plPicCam')) $('#plPicCam').onclick=()=>$('#plPicCamIn').click();
+    if($('#plPicCh')) $('#plPicCh').onclick=()=>$('#plPicIn').click();
+    if($('#plPicDel')) $('#plPicDel').onclick=()=>{ snapPlan(); planImg=''; render() };
+    if($('#plPicView')) $('#plPicView').onclick=()=>showImg(planImg);
+    const takePl=ev=>{ const f=ev.target.files[0]; ev.target.value='';
+      if(f){ snapPlan(); shrinkImage(f, url=>{ planImg=url; render() }) } };
+    if($('#plPicIn')) $('#plPicIn').onchange=takePl;
+    if($('#plPicCamIn')) $('#plPicCamIn').onchange=takePl;
+  }
+  on('[data-ped]','click',e=>{ planEdit=e.target.dataset.ped; planDraft=null; planOpen=true;
+    const t=(S.plan||[]).find(x=>x.id===planEdit); planImg = t&&t.img ? t.img : '';
+    render(); const el=$('#plAmt'); if(el) el.focus() });
+  on('[data-prm]','click',e=>{ if(!confirm('이 지출예정을 지울까요?')) return;
+    S.plan=(S.plan||[]).filter(x=>x.id!==e.target.dataset.prm);
+    if(planEdit===e.target.dataset.prm) planEdit=null; save(); render() });
+  on('[data-pimg]','click',e=>{ const t=(S.plan||[]).find(x=>x.id===e.target.dataset.pimg); if(t&&t.img) showImg(t.img) });
   const nsv = document.getElementById('navSave');
   if(nsv) nsv.onclick = ()=>{ serverOn()? srvSave() : saveFile() };
   const nex = document.getElementById('navExit');
@@ -1091,6 +1139,12 @@ function render(){
     focusType=false;
     const ft=document.getElementById('fType');
     if(ft){ try{ ft.scrollIntoView({block:'center'}) }catch(e){} ft.focus() }
+  }
+  if(planAdd){
+    const tr=document.querySelector(`tr[data-prow="${planAdd}"]`);
+    if(tr){ try{ tr.scrollIntoView({block:'center'}) }catch(e){}
+      tr.classList.add('hl'); setTimeout(()=>tr.classList.remove('hl'),1800) }
+    planAdd=null;
   }
   if(lastAdd){                              // 방금 입력한 줄이 보이도록 이동 + 강조
     const tr = document.querySelector(`tr[data-row="${lastAdd}"]`);
@@ -1514,6 +1568,96 @@ function showImg(src){
   ov.innerHTML = '<img src="'+src+'"><div class="cls">닫기</div>';
   ov.onclick = function(){ ov.remove() };
   document.body.appendChild(ov);
+}
+
+/* ── 지출예정 ── */
+let planEdit=null, planImg='', planDraft=null, planOpen=true, planAdd=null;
+function planList(){
+  const a=(S.plan||[]).map((e,i)=>({e,i}));
+  if(sortDate) a.sort((x,y)=>{ const dx=x.e.date||'9999', dy=y.e.date||'9999';
+    return dx<dy?-1:dx>dy?1:x.i-y.i });
+  return a.map(x=>x.e);
+}
+function planSum(cat){ return (S.plan||[]).filter(e=>!cat||e.cat===cat).reduce((t,e)=>t+Math.abs(+e.amount||0),0) }
+function vPlan(){
+  const list = planList(), ed = planEdit ? (S.plan||[]).find(e=>e.id===planEdit) : null;
+  const dr = (!ed && planDraft) ? planDraft : null;
+  const hasCam = (navigator.maxTouchPoints||0) > 0;
+  const total = planSum('');
+  const budg = S.expenseItems.reduce((t,i)=>t+(+i.budget||0),0);
+  return `
+  ${pHead(`${S.meta.year}년 ${S.meta.dept} 지출예정`, `앞으로 쓸 금액을 미리 적어 두는 곳입니다`)}
+  <div class="note no-print">여기 적은 금액은 <b>출납부·결산에 들어가지 않습니다.</b> 이 화면에서만 합계를 냅니다. 실제로 지출하면 출납부에 따로 기록하세요.</div>
+
+  <div class="card">
+    <h2 class="no-print">지출예정 내역
+      <button class="btn g sm" style="margin-left:10px;vertical-align:middle" onclick="window.print()">인쇄 (A4)</button></h2>
+
+    ${(planOpen||allMode)?'':`<div class="tools no-print no-ro" style="margin-bottom:12px">
+      <button class="btn" id="plMore">＋ 계속 입력</button>
+      <span class="hint" style="margin:0">방금 넣은 내용이 아래에 표시됩니다.</span></div>`}
+    <div class="form no-print no-ro" ${planOpen?'':'style="display:none"'}>
+      <div class="fr">
+        <div class="fi f-hang"><label>항</label><select id="plCat"></select></div>
+        <div class="fi f-date"><label>날짜</label>
+          <input type="text" inputmode="numeric" id="plDate" placeholder="26.02.11" value="${ed?fmtDate(ed.date):dr?esc(dr.date):''}"></div>
+        <div class="fi f-amt"><label>금액</label>
+          <input type="text" class="n" id="plAmt" value="${ed?won(ed.amount):dr?esc(dr.amt):''}" placeholder="0"></div>
+      </div>
+      <div class="fr">
+        <div class="fi f-note"><label>산출근거</label>
+          <input type="text" id="plNote" value="${ed?esc(ed.note):dr?esc(dr.note):''}" placeholder="예: 여름성경학교 교재"></div>
+        <span class="pic">
+          ${planImg?`<img src="${planImg}" id="plPicView" title="눌러서 크게 보기">
+                     <button class="btn g sm" id="plPicCh">바꾸기</button>
+                     <button class="btn g sm" id="plPicDel">빼기</button>`
+                   :`${hasCam?`<button class="btn g" id="plPicCam">📷 촬영</button>`:''}
+                     <button class="btn g" id="plPic">🖼 사진</button>`}
+          <input type="file" id="plPicIn" accept="image/*" style="display:none">
+          <input type="file" id="plPicCamIn" accept="image/*" capture="environment" style="display:none">
+        </span>
+        <button class="btn" id="plAdd">${ed?'수정':'추가'}</button>
+        ${ed?`<button class="btn g" id="plCancel">취소</button>`:''}
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="col" style="flex:3;min-width:420px">
+        <div class="scroll"><table class="lg">
+          <thead><tr><th style="width:150px">항</th><th style="width:60px">날짜</th>
+            <th class="n" style="width:104px">금액</th><th style="width:170px">산출근거</th>
+            <th class="c no-print" style="width:44px">증빙</th><th class="n" style="width:108px">누계</th>
+            <th class="no-print no-ro" style="width:64px"></th></tr></thead>
+          <tbody>
+            ${(()=>{ let run=0; return list.map(e=>{ run+=Math.abs(+e.amount||0); return `<tr data-prow="${e.id}">
+              <td>${esc(e.cat)||'<span class="badge b-w">미지정</span>'}</td>
+              <td>${e.date?e.date.slice(5).replace('-','/'):''}</td>
+              <td class="n out">${won(e.amount)}</td>
+              <td>${esc(e.note)}</td>
+              <td class="c no-print">${e.img?`<img class="thumb" src="${e.img}" data-pimg="${e.id}" title="눌러서 크게 보기">`:''}</td>
+              <td class="n">${won(run)}</td>
+              <td class="c no-print no-ro"><button class="btn g sm no-ro" data-ped="${e.id}">✎</button> <button class="btn dg sm no-ro" data-prm="${e.id}">×</button></td></tr>` }).join('') })()}
+            <tr class="tot"><td colspan="2">지출예정 합계</td><td class="n">${won(total)}</td><td></td>
+              <td class="c no-print"></td><td class="n">${won(total)}</td><td class="no-print no-ro"></td></tr>
+          </tbody></table></div>
+        ${list.length?'<p class="swipe">← 표를 옆으로 밀어 보세요 →</p>':'<p class="hint" style="margin-top:10px">아직 적어 둔 지출예정이 없습니다.</p>'}
+      </div>
+
+      <div class="col" style="flex:2;min-width:280px">
+        <div class="card" style="margin:0">
+          <h2 style="font-size:14px">항목별 소계</h2>
+          <table><thead><tr><th>지출</th><th class="n">예정액</th></tr></thead><tbody>
+          ${S.expenseItems.map(it=>{const v=planSum(it.name);
+            return `<tr><td>${esc(it.name)}</td><td class="n ${v?'out':''}">${v?won(v):'-'}</td></tr>`}).join('')}
+          <tr class="sub"><td>계</td><td class="n">${won(total)}</td></tr>
+          </tbody></table>
+          <div class="kv" style="margin-top:14px"><span>지출 예산 합계</span><b>${won(budg)}</b></div>
+          <div class="kv" style="border:0"><span>예산 대비</span><b>${budg?Math.round(total/budg*100):0}%</b></div>
+        </div>
+      </div>
+    </div>
+    <div class="print-only">${signBox()}</div>
+  </div>`;
 }
 
 /* ── 출납부 › 현재 상황 ── */
@@ -2432,7 +2576,9 @@ function bind(){
                     : baseInc.slice(0,g).concat(newInc, baseInc.slice(g));
     const exp=S.expenseItems.map(i=>({name:i.name,budget:+S.nextYear.expense[i.name]||0,basis:S.nextYear.basis[i.name]||''}))
       .concat(S.nextYear.extraExp.filter(x=>x.name.trim()).map(x=>({name:x.name.trim(),budget:x.amt,basis:x.basis})));
-    S={meta:{year:y,dept:S.meta.dept,church:S.meta.church},openingBalance:s.q4,
+    S={meta:{year:y,dept:S.meta.dept,church:S.meta.church,url:S.meta.url,server:S.meta.server,
+             serverKey:S.meta.serverKey,writer:S.meta.writer,leader:S.meta.leader},
+       cover:S.cover, plan:[], openingBalance:s.q4,
        incomeItems:inc,expenseItems:exp,entries:{DEC:[],Q1:[],Q2:[],Q3:[],Q4:[]},
        nextYear:{expense:{},income:{},basis:{},extraExp:[],extraInc:[],dec:0,note:''}};
     save(); tab='guide'; per='DEC'; render();
