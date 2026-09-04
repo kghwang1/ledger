@@ -211,8 +211,17 @@ ol.steps small{color:var(--mute);display:block}
 .vrow input{width:auto;flex:none}
 .imgov{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:99;display:flex;
   align-items:center;justify-content:center;flex-direction:column;gap:14px;padding:20px;cursor:zoom-out}
-.imgov img{max-width:100%;max-height:82vh;border-radius:8px;background:#fff}
+.imgov img{max-width:100%;max-height:78vh;border-radius:8px;background:#fff}
 .imgov .cls{color:#fff;font-size:14px;font-weight:600}
+.imgov .ovbar{display:flex;align-items:center;gap:14px;width:100%;max-width:820px;justify-content:space-between}
+.imgov .ovn{color:#fff;font-size:14px;font-weight:600}
+.imgov .ovx{background:rgba(255,255,255,.2);color:#fff;border:0;border-radius:7px;padding:7px 16px;
+  font-size:14px;font-weight:600;cursor:pointer;font-family:inherit}
+.imgov .ovmain{display:flex;align-items:center;gap:10px;width:100%;max-width:820px;justify-content:center}
+.imgov .ovp,.imgov .ovnx{background:rgba(255,255,255,.18);color:#fff;border:0;border-radius:50%;
+  width:44px;height:44px;font-size:26px;line-height:1;cursor:pointer;flex:none}
+.thumbs{display:flex;gap:5px;align-items:center;flex-wrap:wrap}
+.thumbs .cnt{font-size:11.5px;color:var(--mute)}
 .thumb{width:26px;height:26px;object-fit:cover;border-radius:4px;border:1px solid var(--line);cursor:pointer;vertical-align:middle}
 .pic{display:flex;align-items:center;gap:6px}
 .pic img{width:30px;height:30px;object-fit:cover;border-radius:5px;border:1px solid var(--line)}
@@ -600,7 +609,7 @@ let quotaWarned=false;
 
 function uid(){ return Math.random().toString(36).slice(2,9) }
 function fresh(){
-  return {meta:{year:new Date().getFullYear(),dept:'',church:'',url:'',server:'',serverKey:'',writer:'',leader:''},cover:{},plan:[],openingBalance:0,
+  return {meta:{year:new Date().getFullYear(),dept:'',church:'',url:'',server:'',serverKey:'',writer:'',leader:''},cover:{},plan:[],memos:[],openingBalance:0,
     incomeItems:[{name:'이월금',budget:0}],expenseItems:[],
     entries:{DEC:[],Q1:[],Q2:[],Q3:[],Q4:[]},
     nextYear:{expense:{},income:{},basis:{},extraExp:[],extraInc:[],dec:0,note:''}};
@@ -610,6 +619,12 @@ function norm(s){
   s.meta = Object.assign({year:2026,dept:'',church:'',url:'',server:'',serverKey:'',writer:'',leader:''}, s.meta);
   s.cover = Object.assign({headTop:25, bodyTop:33, submit:'', close:'', files:''}, s.cover);
   s.plan = (s.plan||[]).map(e=>Object.assign({id:uid(),cat:'',date:'',amount:0,note:'',img:''},e));
+  s.memos = (s.memos||[]).map(e=>{
+    const m = Object.assign({id:uid(),date:'',text:'',etc:'',img:'',imgs:[]}, e);
+    if((!m.imgs || !m.imgs.length) && m.img) m.imgs=[m.img];      // 예전 자료도 이어받는다
+    m.imgs = (m.imgs||[]).filter(x=>x); m.img='';
+    return m;
+  });
   if(!String(s.meta.url||'').trim()) s.meta.url = HOME_URL;   // 배포 주소 기본값
   s.nextYear = Object.assign({expense:{},income:{},basis:{},extraExp:[],extraInc:[],dec:0,note:''}, s.nextYear);
   s.nextYear.extraExp = (s.nextYear.extraExp||[]).map(x=>({name:x.name||'',amt:+x.amt||0,basis:x.basis||''}));
@@ -633,7 +648,7 @@ const store = {
 };
 let saveT=null;
 function save(){
-  if(ro) return;                       // 열람 모드에서는 저장하지 않는다
+  if(ro || locked) return;             // 열람 모드에서는 저장하지 않는다
   dirty=true; setStatus('저장 중…');
   clearTimeout(saveT);
   saveT = setTimeout(async()=>{
@@ -651,7 +666,7 @@ function setStatus(t){ const el=document.getElementById('hSt'); if(el) el.textCo
 window.addEventListener('beforeunload', e=>{ if(dirty){ e.preventDefault(); e.returnValue='' } });
 
 /* ───────── 서버(공유) 저장 ───────── */
-const APPVER = '2026.71';
+const APPVER = '2026.81';
 const LIBKEY = 'church_ledger_lib_v1';
 const DATASHEET = '_data', DATATAG = 'CHURCH_LEDGER_V1';
 const XLSXMIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -825,6 +840,7 @@ async function api(action, body){
 const USERKEY='_users', CACHEKEY='church_ledger_cache_v1', FILEKEY='church_ledger_file_';
 let preKey='', prePromise=null;                    // 미리 받아오는 중인 파일
 let listFresh=false;                               // 목록을 서버에서 새로 받았는가
+let locked=false;                                  // 가계부 — 열람(잠김) / 작성
 let diagMsg='';
 function fileAt(key){ const x=(deptList||[]).find(d=>d.name+'|'+d.year===key); return x? (x.at||0) : 0 }
 async function getRec(key){
@@ -1049,7 +1065,7 @@ function settle(){
   const expT = exp.reduce((s,x)=>s+x.actual,0);
   const incB = inc.reduce((s,x)=>s+x.budget,0);
   const expB = exp.reduce((s,x)=>s+x.budget,0);
-  return {carry,inc,exp,incT,expT,incB,expB, dec:incT-expT, next:0, q4:closing('Q4')};
+  return {carry,inc,exp,incB,expB,incT,expT, dec:(authRole==='home'?0:incT-expT), next:0, q4:closing('Q4')};
 }
 function knownCats(){ return new Set([...S.incomeItems, ...S.expenseItems].map(i=>i.name)) }
 function orphanCount(){
@@ -1059,7 +1075,7 @@ function orphanCount(){
 }
 
 /* ───────── 렌더 ───────── */
-const TABS = [['guide','안내'],['budget','예산'],['ledger','출납부'],['settle','결산'],['next','새해예산요구'],['plan','지출예정'],['data','⚙']];
+const TABS = [['guide','안내'],['budget','예산'],['ledger','출납부'],['settle','결산'],['next','새해예산요구'],['plan','지출예정'],['memo','자료'],['data','⚙']];
 function render(){
   const hd=document.querySelector('header');
   if(screen==='cover'){
@@ -1071,18 +1087,26 @@ function render(){
   }
   if(hd) hd.style.display='';
   if(tab==='next' && authRole==='home') tab='guide';
+  if(tab==='memo' && authRole!=='home') tab='guide';
+  if(tab==='guide' && authRole==='home') tab='memo';
   document.getElementById('hTitle').textContent = ro
     ? `${S.meta.year}년 ${roName} 자료열람`
-    : `${S.meta.year}년 ${S.meta.dept||'부서'} 회계장부`;
+    : (authRole==='home' ? `${S.meta.dept||''} 회계장부`
+                         : `${S.meta.year}년 ${S.meta.dept||'부서'} 회계장부`);
   document.getElementById('hSub').textContent = (authRole==='home') ? '' : (S.meta.church || '');
   document.body.classList.toggle('viewing', !!(ro || guideMode==='view'));
 
   document.getElementById('nav').innerHTML =
-    TABS.filter(([k])=>!(k==='data' && (guideMode==='view'||ro)) && !(k==='next' && authRole==='home'))
+    TABS.filter(([k])=>!(k==='data' && (guideMode==='view'||ro))
+                    && !(k==='next' && authRole==='home')
+                    && !(k==='guide' && authRole==='home')
+                    && !(k==='memo' && authRole!=='home'))
         .map(([k,l])=>`<button data-tab="${k}" class="${tab===k?'on':''}">${l}</button>`).join('')
     ;
   document.getElementById('hSave').innerHTML =
-    ((ro||guideMode==='view') ? '' : '<button id="navSave" class="nsave">저장</button>')
+    ((authRole==='home' && !ro)
+      ? `<button id="navLock" class="nsave ${locked?'alt':''}">${locked?'열람':'작성'}</button>` : '')
+    + ((ro||guideMode==='view') ? '' : '<button id="navSave" class="nsave">저장</button>')
     + '<button id="navExit" class="nsave alt">종료</button>';
 
   const upd = newVer ? `<div class="robar no-print" style="background:#e8f0ed;border-color:#cfe6da;color:#26493f">
@@ -1100,18 +1124,66 @@ function render(){
     : (srvMsg? `<div class="robar no-print" style="background:var(--in-bg);border-color:#cfe6da;color:#1d6b4f">${esc(srvMsg)}</div>`:'');
 
   document.getElementById('view').innerHTML = upd + banner +
-    ({guide:vGuide,budget:vBudget,ledger:vLedger,settle:vSettle,next:vNext,plan:vPlan,data:vData,browse:vBrowse,print:vPrint})[tab]();
+    ({guide:vGuide,budget:vBudget,ledger:vLedger,settle:vSettle,next:vNext,plan:vPlan,memo:vMemo,data:vData,browse:vBrowse,print:vPrint})[tab]();
   document.querySelectorAll('#nav button[data-tab]').forEach(b=>b.onclick=()=>{
     const k=b.dataset.tab;
     if(k==='plan' && tab!=='plan'){ planEdit=null; planImg=''; planDraft=null; planOpen=true }
+    if(k==='memo' && tab!=='memo'){ memoEdit=null; memoImgs=[]; memoDraft=null; memoOpen=true }
     if(k==='ledger' && tab!=='ledger'){                 // 출납부를 열면 오늘 날짜의 분기·달로
       const t=todayPeriod();
       if(t){ per=t.k; mfil=t.m } 
+      if(per==='DEC' && authRole==='home') per='Q1';
       editId=null; formOpen=true;
     }
     tab=k; render(); window.scrollTo(0,0);
   });
   if($('#fMore')) $('#fMore').onclick=()=>{ formOpen=true; focusType=true; render() };
+
+  /* ── 자료 ── */
+  if($('#moMore')) $('#moMore').onclick=()=>{ memoOpen=true; render(); const el=$('#moText'); if(el) el.focus() };
+  const mt=$('#moText');
+  if(mt){
+    const snapMemo=()=>{ memoDraft={text:mt.value, etc:$('#moEtc').value} };
+    const addMemo=()=>{
+      const t=mt.value.trim(), etc=$('#moEtc').value.trim();
+      if(!t && !etc && !memoImgs.length){ alert('자료내용을 넣어 주세요.'); mt.focus(); return }
+      if(memoEdit){ const i=(S.memos||[]).findIndex(x=>x.id===memoEdit);
+        S.memos[i]=Object.assign({}, S.memos[i], {text:t, etc:etc, imgs:memoImgs.slice(), img:''});
+        memoAdd=memoEdit; memoEdit=null }
+      else { const id=uid(); S.memos.push({id, date:todayISO(), text:t, etc:etc, imgs:memoImgs.slice(), img:''}); memoAdd=id }
+      memoImgs=[]; memoDraft=null; memoOpen=false;
+      try{ if(document.activeElement && document.activeElement.blur) document.activeElement.blur() }catch(e){}
+      save(); render();
+    };
+    $('#moAdd').onclick=addMemo;
+    ['moText','moEtc'].forEach(id=>{ const el=$('#'+id); if(el) el.onkeydown=ev=>{ if(ev.key==='Enter') addMemo() } });
+    if($('#moCancel')) $('#moCancel').onclick=()=>{ memoEdit=null; memoImgs=[]; memoDraft=null; render() };
+    if($('#moPic')) $('#moPic').onclick=()=>$('#moPicIn').click();
+    if($('#moPicCam')) $('#moPicCam').onclick=()=>$('#moPicCamIn').click();
+    if($('#moPicClr')) $('#moPicClr').onclick=()=>{ snapMemo(); memoImgs=[]; render() };
+    if($('#moPicPop')) $('#moPicPop').onclick=()=>{ snapMemo(); memoImgs.pop(); render() };
+    on('[data-mopv]','click',e=>showImgs(memoImgs, +e.target.dataset.mopv));
+    const takeMo=ev=>{                                    // 고른 순서대로 쌓는다
+      const fl=Array.prototype.slice.call(ev.target.files||[]); ev.target.value='';
+      if(!fl.length) return;
+      snapMemo();
+      let i=0;
+      (function next(){
+        if(i>=fl.length){ render(); return }
+        shrinkImage(fl[i++], url=>{ memoImgs.push(url); next() });
+      })();
+    };
+    if($('#moPicIn')) $('#moPicIn').onchange=takeMo;
+    if($('#moPicCamIn')) $('#moPicCamIn').onchange=takeMo;
+  }
+  on('[data-med]','click',e=>{ memoEdit=e.target.dataset.med; memoDraft=null; memoOpen=true;
+    const t=(S.memos||[]).find(x=>x.id===memoEdit); memoImgs = t&&t.imgs ? t.imgs.slice() : [];
+    render(); const el=$('#moText'); if(el) el.focus() });
+  on('[data-mrm]','click',e=>{ if(!confirm('이 자료를 지울까요?')) return;
+    S.memos=(S.memos||[]).filter(x=>x.id!==e.target.dataset.mrm);
+    if(memoEdit===e.target.dataset.mrm) memoEdit=null; save(); render() });
+  on('[data-mimg]','click',e=>{ const t=(S.memos||[]).find(x=>x.id===e.target.dataset.mimg);
+    if(t && (t.imgs||[]).length) showImgs(t.imgs, 0) });
 
   /* ── 지출예정 ── */
   if($('#plMore')) $('#plMore').onclick=()=>{ planOpen=true; render(); const el=$('#plCat'); if(el) el.focus() };
@@ -1164,11 +1236,13 @@ function render(){
   if(nsv) nsv.onclick = ()=>{ serverOn()? srvSave() : saveFile() };
   const nex = document.getElementById('navExit');
   if(nex) nex.onclick = exitApp;
+  const nlk = document.getElementById('navLock');
+  if(nlk) nlk.onclick = ()=>{ locked=!locked; render() };
   document.getElementById('deptFiles').onchange = e=>{ openDeptFiles(e.target.files); e.target.value='' };
   document.getElementById('myFile').onchange = e=>{ if(e.target.files[0]) openMyFile(e.target.files[0]); e.target.value='' };
   bind();
 
-  if(ro){                                   // 열람 모드: 모든 입력 잠금 + 편집 버튼 숨김
+  if(ro || locked){                         // 열람 모드: 모든 입력 잠금 + 편집 버튼 숨김
     document.querySelectorAll('#view input,#view select,#view textarea')
       .forEach(el=>{ if(!el.hasAttribute('data-vfile')) el.disabled=true });   // 열람 목록은 계속 고를 수 있게
     document.querySelectorAll('#view .no-ro').forEach(el=>el.style.display='none');
@@ -1177,6 +1251,12 @@ function render(){
     focusType=false;
     const ft=document.getElementById('fType');
     if(ft){ try{ ft.scrollIntoView({block:'center'}) }catch(e){} ft.focus() }
+  }
+  if(memoAdd){
+    const tr=document.querySelector(`tr[data-mrow="${memoAdd}"]`);
+    if(tr){ try{ tr.scrollIntoView({block:'center'}) }catch(e){}
+      tr.classList.add('hl'); setTimeout(()=>tr.classList.remove('hl'),1800) }
+    memoAdd=null;
   }
   if(planAdd){
     const tr=document.querySelector(`tr[data-prow="${planAdd}"]`);
@@ -1461,6 +1541,14 @@ function openBox(){
 /* ── 안내 ── */
 function vGuide(){
   const s=settle();
+  if(authRole==='home') return `
+  ${pHead(`${S.meta.dept} 회계장부`, '')}
+  <div class="card">
+    <h2>${esc(S.meta.dept)} 장부</h2>
+    <div class="kv"><span>읽어 온 자료</span><b>${curFile? esc(curFile) : '새로 시작한 장부'}</b></div>
+    <div class="kv" style="border:0"><span>적어 둔 거래</span><b>${P.reduce((t,p)=>t+ents(p.k).length,0)}건</b></div>
+    ${printBox()}
+  </div>`;
   return `
   ${pHead(`${S.meta.year}년 ${S.meta.dept} 회계장부 안내`, `회계기간 ${PERIOD(S.meta.year)}`)}
   <div class="row">
@@ -1612,15 +1700,108 @@ function shrinkImage(file, cb){
 function imgStats(){
   let n=0, b=0;
   P.forEach(p=>ents(p.k).forEach(e=>{ if(e.img){ n++; b+=e.img.length } }));
+  (S.plan||[]).forEach(e=>{ if(e.img){ n++; b+=e.img.length } });
+  (S.memos||[]).forEach(e=>(e.imgs||[]).forEach(u=>{ n++; b+=u.length }));
   return {n:n, mb:(b/1048576)};
 }
-function showImg(src){
+function showImg(src){ showImgs([src], 0) }
+function showImgs(list, idx){
+  list = (list||[]).filter(x=>x);
+  if(!list.length) return;
+  let i = Math.max(0, Math.min(idx||0, list.length-1));
   const ov = document.createElement('div');
   ov.className = 'imgov';
-  ov.innerHTML = '<img src="'+src+'"><div class="cls">닫기</div>';
-  ov.onclick = function(){ ov.remove() };
+  ov.innerHTML =
+    '<div class="ovbar"><span class="ovn"></span><button class="ovx">닫기</button></div>'
+    + '<div class="ovmain"><button class="ovp">‹</button><img><button class="ovnx">›</button></div>';
+  const img = ov.querySelector('img'), num = ov.querySelector('.ovn');
+  const draw = ()=>{ img.src = list[i]; num.textContent = (i+1)+' / '+list.length;
+    ov.querySelector('.ovp').style.visibility = list.length>1?'visible':'hidden';
+    ov.querySelector('.ovnx').style.visibility = list.length>1?'visible':'hidden'; };
+  const go = d => { i = (i + d + list.length) % list.length; draw() };
+  ov.querySelector('.ovp').onclick = e=>{ e.stopPropagation(); go(-1) };
+  ov.querySelector('.ovnx').onclick = e=>{ e.stopPropagation(); go(1) };
+  ov.querySelector('.ovx').onclick = ()=>close();
+  ov.onclick = e=>{ if(e.target===ov || e.target===ov.querySelector('.ovmain')) close() };
+  let sx=0;
+  ov.addEventListener('touchstart', e=>{ sx = e.touches[0].clientX }, {passive:true});
+  ov.addEventListener('touchend', e=>{                       // 손가락으로 넘기기
+    const dx = e.changedTouches[0].clientX - sx;
+    if(Math.abs(dx)>40) go(dx<0?1:-1);
+  }, {passive:true});
+  function onKey(ev){ if(ev.key==='ArrowLeft') go(-1); else if(ev.key==='ArrowRight') go(1); else if(ev.key==='Escape') close() }
+  function close(){ document.removeEventListener('keydown', onKey); ov.remove() }
+  document.addEventListener('keydown', onKey);
+  draw();
   document.body.appendChild(ov);
 }
+
+/* ── 자료 ── */
+let memoEdit=null, memoImgs=[], memoDraft=null, memoOpen=true, memoAdd=null;
+function todayISO(){ const d=new Date();
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0') }
+function vMemo(){
+  const list=(S.memos||[]).slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const ed = memoEdit ? (S.memos||[]).find(e=>e.id===memoEdit) : null;
+  const dr = (!ed && memoDraft) ? memoDraft : null;
+  const hasCam = (navigator.maxTouchPoints||0) > 0;
+  return `
+  ${pHead(`${S.meta.dept} 자료`, '적어 두고 싶은 내용을 사진과 함께 남깁니다')}
+  <div class="card">
+    <h2 class="no-print">자료
+      <button class="btn g sm" style="margin-left:10px;vertical-align:middle" onclick="window.print()">인쇄 (A4)</button></h2>
+
+    ${(memoOpen||locked)?'':`<div class="tools no-print no-ro" style="margin-bottom:12px">
+      <button class="btn" id="moMore">＋ 계속 입력</button></div>`}
+    <div class="form no-print no-ro" ${(memoOpen&&!locked)?'':'style="display:none"'}>
+      <div class="fr">
+        <div class="fi" style="flex:1 1 100%"><label>자료내용</label>
+          <input type="text" id="moText" value="${ed?esc(ed.text):dr?esc(dr.text):''}" placeholder="예: 매장 임대차 계약 조건"></div>
+      </div>
+      <div class="fr">
+        <div class="fi" style="flex:1 1 200px"><label>기타</label>
+          <input type="text" id="moEtc" value="${ed?esc(ed.etc):dr?esc(dr.etc):''}" placeholder="비고"></div>
+        <span class="pic">
+          ${hasCam?`<button class="btn g" id="moPicCam">📷 촬영</button>`:''}
+          <button class="btn g" id="moPic">🖼 사진</button>
+          <input type="file" id="moPicIn" accept="image/*" multiple style="display:none">
+          <input type="file" id="moPicCamIn" accept="image/*" capture="environment" style="display:none">
+        </span>
+        <button class="btn" id="moAdd">${ed?'수정':'추가'}</button>
+        ${ed?`<button class="btn g" id="moCancel">취소</button>`:''}
+      </div>
+      ${memoImgs.length?`<div class="fr">
+        <span class="hint" style="margin:0">사진 ${memoImgs.length}장</span>
+        <span class="thumbs">${memoImgs.map((u,i)=>`<img class="thumb" src="${u}" data-mopv="${i}" title="${i+1}번째 — 눌러서 보기">`).join('')}</span>
+        <button class="btn g sm" id="moPicClr">사진 모두 빼기</button>
+        <button class="btn g sm" id="moPicPop">마지막 한 장 빼기</button>
+      </div>`:''}
+      ${ed?'':`<p class="hint" style="margin:0">날짜는 오늘(${fmtDate(todayISO())})로 저절로 들어갑니다. 사진은 찍은 순서대로 쌓입니다.</p>`}
+    </div>
+
+    <div class="scroll"><table class="lg">
+      <thead><tr><th style="width:70px">날짜</th><th>자료내용</th><th style="width:150px">기타</th>
+        <th class="c no-print" style="width:44px">사진</th><th class="no-print no-ro" style="width:64px"></th></tr></thead>
+      <tbody>
+        ${list.map(e=>`<tr data-mrow="${e.id}">
+          <td>${e.date?fmtDate(e.date):''}</td>
+          <td>${esc(e.text)}</td>
+          <td>${esc(e.etc)}</td>
+          <td class="c no-print">${(e.imgs||[]).length?`<img class="thumb" src="${e.imgs[0]}" data-mimg="${e.id}" title="사진 ${e.imgs.length}장 — 눌러서 보기">${e.imgs.length>1?`<div class="cnt">${e.imgs.length}장</div>`:''}`:''}</td>
+          <td class="c no-print no-ro"><button class="btn g sm no-ro" data-med="${e.id}">✎</button>
+            <button class="btn dg sm no-ro" data-mrm="${e.id}">×</button></td></tr>`).join('')}
+        ${list.length?'':'<tr><td colspan="5" class="hint" style="padding:14px">아직 적어 둔 자료가 없습니다.</td></tr>'}
+      </tbody></table></div>
+  </div>
+
+  <div class="card">
+    <h2>${esc(S.meta.dept)} 장부</h2>
+    <div class="kv"><span>읽어 온 자료</span><b>${curFile? esc(curFile) : '새로 시작한 장부'}</b></div>
+    <div class="kv" style="border:0"><span>적어 둔 거래</span><b>${P.reduce((t,p)=>t+ents(p.k).length,0)}건</b></div>
+    ${printBox()}
+  </div>`;
+}
+
 
 /* ── 지출예정 ── */
 let planEdit=null, planImg='', planDraft=null, planOpen=true, planAdd=null;
@@ -1629,6 +1810,10 @@ function planList(){
   if(sortDate) a.sort((x,y)=>{ const dx=x.e.date||'9999', dy=y.e.date||'9999';
     return dx<dy?-1:dx>dy?1:x.i-y.i });
   return a.map(x=>x.e);
+}
+function noteLbl(){ return authRole==='home' ? '세부내역' : '산출근거' }
+function spentAll(){                     // 출납부에 적힌 지출 전체
+  return P.reduce((t,p)=>t+ents(p.k).filter(e=>e.type==='지출').reduce((x,e)=>x+Math.abs(+e.amount||0),0),0);
 }
 function planSum(cat){ return (S.plan||[]).filter(e=>!cat||e.cat===cat).reduce((t,e)=>t+Math.abs(+e.amount||0),0) }
 function vPlan(){
@@ -1650,14 +1835,14 @@ function vPlan(){
       <span class="hint" style="margin:0">방금 넣은 내용이 아래에 표시됩니다.</span></div>`}
     <div class="form no-print no-ro" ${planOpen?'':'style="display:none"'}>
       <div class="fr">
-        <div class="fi f-hang"><label>항</label><select id="plCat"></select></div>
         <div class="fi f-date"><label>날짜</label>
           <input type="text" inputmode="numeric" id="plDate" placeholder="26.02.11" value="${ed?fmtDate(ed.date):dr?esc(dr.date):''}"></div>
+        <div class="fi f-hang"><label>항</label><select id="plCat"></select></div>
         <div class="fi f-amt"><label>금액</label>
           <input type="text" class="n" id="plAmt" value="${ed?won(ed.amount):dr?esc(dr.amt):''}" placeholder="0"></div>
       </div>
       <div class="fr">
-        <div class="fi f-note"><label>산출근거</label>
+        <div class="fi f-note"><label>${noteLbl()}</label>
           <input type="text" id="plNote" value="${ed?esc(ed.note):dr?esc(dr.note):''}" placeholder="예: 여름성경학교 교재"></div>
         <span class="pic">
           ${planImg?`<img src="${planImg}" id="plPicView" title="눌러서 크게 보기">
@@ -1676,14 +1861,14 @@ function vPlan(){
     <div class="row">
       <div class="col" style="flex:3;min-width:420px">
         <div class="scroll"><table class="lg">
-          <thead><tr><th style="width:150px">항</th><th style="width:60px">날짜</th>
-            <th class="n" style="width:104px">금액</th><th style="width:170px">산출근거</th>
+          <thead><tr><th style="width:60px">날짜</th><th style="width:150px">항</th>
+            <th class="n" style="width:104px">금액</th><th style="width:170px">${noteLbl()}</th>
             <th class="c no-print" style="width:44px">증빙</th><th class="n" style="width:108px">누계</th>
             <th class="no-print no-ro" style="width:64px"></th></tr></thead>
           <tbody>
             ${(()=>{ let run=0; return list.map(e=>{ run+=Math.abs(+e.amount||0); return `<tr data-prow="${e.id}">
-              <td>${esc(e.cat)||'<span class="badge b-w">미지정</span>'}</td>
               <td>${e.date?e.date.slice(5).replace('-','/'):''}</td>
+              <td>${esc(e.cat)||'<span class="badge b-w">미지정</span>'}</td>
               <td class="n out">${won(e.amount)}</td>
               <td>${esc(e.note)}</td>
               <td class="c no-print">${e.img?`<img class="thumb" src="${e.img}" data-pimg="${e.id}" title="눌러서 크게 보기">`:''}</td>
@@ -1703,8 +1888,12 @@ function vPlan(){
             return `<tr><td>${esc(it.name)}</td><td class="n ${v?'out':''}">${v?won(v):'-'}</td></tr>`}).join('')}
           <tr class="sub"><td>계</td><td class="n">${won(total)}</td></tr>
           </tbody></table>
-          <div class="kv" style="margin-top:14px"><span>지출 예산 합계</span><b>${won(budg)}</b></div>
-          <div class="kv" style="border:0"><span>예산 대비</span><b>${budg?Math.round(total/budg*100):0}%</b></div>
+          <div class="kv" style="margin-top:14px"><span style="font-size:110%"><b>지출합계</b></span>
+            <b style="font-size:110%">${won(spentAll()+total)}</b></div>
+          <div class="hint" style="margin:2px 0 0">출납부 지출 ${won(spentAll())} + 지출예정 ${won(total)}</div>
+          <div class="kv" style="margin-top:10px"><span>지출 예산 합계</span><b>${won(budg)}</b></div>
+          <div class="kv" style="border:0"><span>예산 대비</span>
+            <b class="${budg&&(spentAll()+total)>budg?'out':''}">${budg?Math.round((spentAll()+total)/budg*100):0}%</b></div>
         </div>
       </div>
     </div>
@@ -1715,7 +1904,7 @@ function vPlan(){
 /* ── 출납부 › 현재 상황 ── */
 function vStatus(){
   const s=settle();
-  const rows = P.map(p=>({
+  const rows = P.filter(p=>!(p.k==='DEC' && authRole==='home')).map(p=>({
     label: pLabel(p),
     inc: ents(p.k).filter(e=>e.type==='수입').reduce((t,e)=>t+e.amount,0),
     exp: ents(p.k).filter(e=>e.type==='지출').reduce((t,e)=>t+e.amount,0),
@@ -1735,7 +1924,7 @@ function vStatus(){
     <table class="ws"><thead><tr><th style="width:55px">기간</th>
       <th class="n" style="width:70px">수입</th><th class="n" style="width:70px">지출</th>
       <th class="n" style="width:77px">잔고</th></tr></thead><tbody>
-      <tr class="sub"><td>이월<span class="nb">(11월 잔고)</span></td>
+      <tr class="sub"><td>이월<span class="nb">${authRole==='home'?'(전년)':'(11월 잔고)'}</span></td>
         <td class="n">-</td><td class="n">-</td><td class="n">${won(S.openingBalance)}</td></tr>
       ${rows.map(r=>`<tr><td>${esc(r.label)}</td>
         <td class="n ${r.inc?'in':''}">${r.inc?won(r.inc):'-'}</td>
@@ -1779,7 +1968,7 @@ function vAll(){
 function vLedger(){
   const chips = `<div class="chips no-print">
     <button class="chip ${per==='SUM'?'on':''}" data-per="SUM">현재 상황</button>
-    ${P.map(x=>`<button class="chip ${x.k===per?'on':''}" data-per="${x.k}" title="${x.d(S.meta.year)}">${pLabel(x)}</button>`).join('')}
+    ${P.filter(x=>!(x.k==='DEC' && authRole==='home')).map(x=>`<button class="chip ${x.k===per?'on':''}" data-per="${x.k}" title="${x.d(S.meta.year)}">${pLabel(x)}</button>`).join('')}
     <button class="chip ${per==='ALL'?'on':''}" data-per="ALL">출납부 출력</button>
   </div>`;
   if(per==='SUM') return chips + vStatus();
@@ -1973,14 +2162,14 @@ function vSettle(){
     <div class="phead" style="margin-bottom:16px">
       <div class="ph-c">${esc(S.meta.church||'')}</div>
       <div class="ph-t">${S.meta.year}년 ${esc(S.meta.dept)} 결산 보고서</div>
-      <div class="ph-s">회계기간 ${PERIOD(S.meta.year)} · 12월은 가결산</div>
+      <div class="ph-s">${authRole==='home'?'':`회계기간 ${PERIOD(S.meta.year)} · 12월은 가결산`}</div>
     </div>
     ${pBar()}
     <div class="row two">
       <div class="col">
         <h2 style="font-size:14px">수입 결산</h2>
         <table class="we"><thead><tr><th style="width:110px">항목</th><th class="n">예산</th><th class="n">수입</th><th class="n">증감</th></tr></thead><tbody>
-        ${s.inc.map((x,i)=>`<tr><td>${esc(x.name)}${i===carryIdx()?` <span class="hint" style="display:inline">(${S.meta.year-1}년 12월 정산 잔고)</span>`:''}</td>
+        ${s.inc.map((x,i)=>`<tr><td>${esc(x.name)}${i===carryIdx()?` <span class="hint" style="display:inline">(${authRole==='home'?'전년 이월':S.meta.year-1+'년 12월 정산 잔고'})</span>`:''}</td>
           <td class="n">${won(x.budget)}</td><td class="n">${won(x.actual)}</td>
           <td class="n ${x.actual-x.budget<0?'out':''}">${won(x.actual-x.budget)}</td></tr>`).join('')}
         <tr class="tot"><td>소계</td><td class="n">${won(s.incB)}</td><td class="n">${won(s.incT)}</td><td class="n">${won(s.incT-s.incB)}</td></tr>
@@ -2002,15 +2191,16 @@ function vSettle(){
       <h2>${S.meta.year}년 결산</h2>
       <div class="kv"><span>수입 합계</span><b class="in">${won(s.incT)}</b></div>
       <div class="kv"><span>지출 합계</span><b class="out">${won(s.expT)}</b></div>
-      <div class="kv"><span>12월 가결산 <span class="hint" style="display:inline">(12월 지출 예상액)</span></span><b>${won(s.dec)}</b></div>
-      <div class="kv" style="border:0"><span><b>${S.meta.year}년 잔고</b></span><b class="big">${won(s.incT-s.expT-s.dec)}</b></div>
-      <p class="hint" style="margin-top:10px">11월 말 남은 잔고 전액을 12월 예상 지출(가결산)로 처리하여 ${S.meta.year}년 잔고를 0으로 맞춥니다. 이 12월분은 실제 집행 후 ${S.meta.year+1}년에 별도로 정산·보고합니다.</p>
+      ${authRole==='home'?'':`<div class="kv"><span>12월 가결산 <span class="hint" style="display:inline">(12월 지출 예상액)</span></span><b>${won(s.dec)}</b></div>`}
+      <div class="kv" style="border:0"><span><b>${authRole==='home'?'남은 잔고':S.meta.year+'년 잔고'}</b></span><b class="big">${won(s.incT-s.expT-s.dec)}</b></div>
+      ${authRole==='home'?'':`<p class="hint" style="margin-top:10px">11월 말 남은 잔고 전액을 12월 예상 지출(가결산)로 처리하여 ${S.meta.year}년 잔고를 0으로 맞춥니다. 이 12월분은 실제 집행 후 ${S.meta.year+1}년에 별도로 정산·보고합니다.</p>`}
     </div>
     <div class="col card">
       <h2>검증</h2>
-      <div class="kv"><span>통장 잔고 (4분기 말)</span><b>${won(s.q4)}</b></div>
-      <div class="kv"><span>12월 가결산 = 4분기 잔고</span><span class="badge ${ok1?'b-ok':'b-no'}">${ok1?'일치':'불일치'}</span></div>
-      <div class="kv"><span>수입 = 지출 + 가결산</span><span class="badge ${ok2?'b-ok':'b-no'}">${ok2?'일치':'불일치'}</span></div>
+      <div class="kv"><span>통장 잔고</span><b>${won(s.q4)}</b></div>
+      ${authRole==='home'?`<div class="kv"><span>수입 − 지출 = 잔고</span><span class="badge ${s.incT-s.expT===s.q4?'b-ok':'b-no'}">${s.incT-s.expT===s.q4?'일치':'불일치'}</span></div>`
+        :`<div class="kv"><span>12월 가결산 = 4분기 잔고</span><span class="badge ${ok1?'b-ok':'b-no'}">${ok1?'일치':'불일치'}</span></div>
+          <div class="kv"><span>수입 = 지출 + 가결산</span><span class="badge ${ok2?'b-ok':'b-no'}">${ok2?'일치':'불일치'}</span></div>`}
       <div class="kv" style="border:0"><span>예산 대비 지출 집행률</span><b>${s.expB?Math.round(s.expT/s.expB*100):0}%</b></div>
       <div class="note" style="margin-top:12px">실제 통장 잔고와 위 금액이 같은지 반드시 확인하세요.</div>
     </div>
@@ -2184,6 +2374,7 @@ function vData(){
       <span class="hint" style="margin:0">먼저 [파일로 저장]을 눌러 올해 자료를 보관하세요.</span></div>
   </div>
 
+  ${authRole==='home'?'':`
   <div class="card">
     <h2>부서 등록</h2>
     <p class="hint">시작 화면에 나오는 부서 목록입니다. <b>열람</b>을 눌러 그 부서가 다른 부서 자료를 볼 수 있는지 정합니다. 부서를 지워도 이미 등록된 사용자는 남습니다.</p>
@@ -2232,7 +2423,7 @@ function vData(){
       <button class="btn g" id="uLoad">다시 읽기</button>
     </div>
     <p class="hint" style="margin:10px 0 0">부서·사용자를 고친 뒤 <b>서버에 저장</b>을 눌러야 다른 기기에도 적용됩니다.</p>
-  </div>
+  </div>`}
 
   <div class="card">
     <h2>프로그램 버전</h2>
@@ -2371,8 +2562,15 @@ function bindCover(){
     await saveCache(); cvBusy=false; render();
   };
   if($('#lgNew')) $('#lgNew').onclick=()=>{
-    if(!confirm(`${authDept} 장부를 새로 시작합니다. 계속할까요?`)) return;
-    S=norm(fresh()); S.meta.dept=authDept;
+    let yr = new Date().getFullYear();
+    if(authRole==='home'){                       // 가계부는 이어서 새 파일을 만든다
+      const mine = deptList.filter(x=>x.name===authDept).map(x=>x.year);
+      if(mine.length) yr = Math.max.apply(null, mine) + 1;
+      if(!confirm(`${authDept} 장부를 새로 만듭니다.\n지금까지 쓰던 자료는 그대로 남고, 새 장부에서 시작합니다.\n계속할까요?`)) return;
+    } else {
+      if(!confirm(`${authDept} 장부를 새로 시작합니다. 계속할까요?`)) return;
+    }
+    S=norm(fresh()); S.meta.dept=authDept; S.meta.year=yr;
     if(authRole==='home'){ S.meta.church='가계부'; S.meta.writer='' }
     else { S.meta.writer=authName; S.meta.church='신대중앙교회' }
     curFile=''; enterApp();
@@ -2417,12 +2615,13 @@ function tryLogin(){
   render();
 }
 function enterApp(){
-  screen='app'; tab='guide'; per='Q1'; editId=null; srvMsg=''; mine=null;
+  locked = (authRole==='home');            // 가계부는 열람으로 시작
+  screen='app'; tab=(authRole==='home'?'memo':'guide'); per='Q1'; editId=null; srvMsg=''; mine=null;
   save(); render(); window.scrollTo(0,0);
 }
 function exitApp(){
   if(dirty && !confirm('저장하지 않은 내용이 있습니다. 그래도 나갈까요?')) return;
-  screen='cover'; ro=false; roName=''; mine=null; guideMode='edit'; srvMsg=''; cvOpen=false; selFile=''; cvMsg='';
+  screen='cover'; ro=false; roName=''; mine=null; guideMode='edit'; srvMsg=''; cvOpen=false; selFile=''; cvMsg=''; locked=false;
   preKey=''; prePromise=null; listFresh=false;
   loadDeptList().then(()=>{ saveCache(); render() });
   render();
@@ -2567,7 +2766,7 @@ function bind(){
     tab='print'; render(); window.scrollTo(0,0);
     setTimeout(()=>{ try{ window.print() }catch(e){} }, 350);
   };
-  if($('#prBack')) $('#prBack').onclick=()=>{ tab='guide'; cvOpen=false; render(); window.scrollTo(0,0) };
+  if($('#prBack')) $('#prBack').onclick=()=>{ tab=(authRole==='home'?'memo':'guide'); cvOpen=false; render(); window.scrollTo(0,0) };
   if($('#cvEdit')) $('#cvEdit').onclick=()=>{ cvOpen=!cvOpen; render() };
   if($('#cvDone')) $('#cvDone').onclick=()=>{ cvOpen=false; render() };
   if($('#cvReset')) $('#cvReset').onclick=()=>{
