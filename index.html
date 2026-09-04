@@ -68,6 +68,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}
 th,td{padding:6px 8px;border-bottom:1px solid var(--line2);text-align:left;vertical-align:middle}
 th{background:#f8f9fb;font-weight:600;color:var(--ink2);font-size:12px;border-bottom:1px solid var(--line);white-space:nowrap}
 td.n,th.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+td.nw,th.nw{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 td.c,th.c{text-align:center}
 tr.tot td{font-weight:700;background:#f8f9fb;border-top:1.5px solid var(--ink2);border-bottom:1.5px solid var(--ink2)}
 tr.sub td{font-weight:600;background:#fbfbfd}
@@ -233,7 +234,9 @@ ol.steps small{color:var(--mute);display:block}
   table.wt{min-width:560px}          /* 결산·새해예산요구 */
   table.wb{min-width:440px}          /* 예산 */
   table.wn{min-width:700px}          /* 새해예산요구 */
-  table.ws{min-width:290px}          /* 현재 상황 */
+  table.ws{min-width:290px}          /* 현재 상황·소계 */
+  table.pl{min-width:560px}          /* 지출예정 내역 */
+  table.ml{min-width:386px}          /* 자료 */
   table.we{min-width:400px}          /* 결산 (수입·지출 같은 폭) */
   table.wi2{min-width:200px}         /* 수입 계획 */
 }
@@ -267,7 +270,7 @@ ol.steps small{color:var(--mute);display:block}
   .row.two table.wn th,.row.two table.wn td{padding:2px}
   .scroll{max-height:none;overflow:visible;border:0;border-radius:0}
   table{width:100%;max-width:100%;font-size:9pt;border-collapse:collapse}
-  table.lg,table.wt,table.wb,table.wn,table.ws,table.we,table.wi2{min-width:0!important}
+  table.lg,table.wt,table.wb,table.wn,table.ws,table.pl,table.ml,table.we,table.wi2{min-width:0!important}
   .card{overflow:visible!important}
   .swipe{display:none!important}
   .pgbreak{break-before:page;page-break-before:always}
@@ -666,7 +669,7 @@ function setStatus(t){ const el=document.getElementById('hSt'); if(el) el.textCo
 window.addEventListener('beforeunload', e=>{ if(dirty){ e.preventDefault(); e.returnValue='' } });
 
 /* ───────── 서버(공유) 저장 ───────── */
-const APPVER = '2026.83';
+const APPVER = '2026.86';
 const LIBKEY = 'church_ledger_lib_v1';
 const DATASHEET = '_data', DATATAG = 'CHURCH_LEDGER_V1';
 const XLSXMIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -1170,7 +1173,7 @@ function render(){
       let i=0;
       (function next(){
         if(i>=fl.length){ render(); return }
-        shrinkImage(fl[i++], url=>{ memoImgs.push(url); next() });
+        shrinkImage(fl[i++], url=>{ memoImgs.push(url); next() }, true);   // 글자가 읽히도록
       })();
     };
     if($('#moPicIn')) $('#moPicIn').onchange=takeMo;
@@ -1667,27 +1670,29 @@ function vBudget(){
 
 /* ── 증빙 사진 ── */
 const IMG_MAX = 700, IMG_LIMIT = 260000;      // 긴 변 700px, 약 260KB 이내로 줄인다
+const DOC_MAX = 1600, DOC_LIMIT = 700000;    // 자료(계약서 등)는 글자가 읽히도록 크게
 function snapForm(){              // 지금 입력칸에 든 값을 담아 둔다
   const t=document.getElementById('fType');
   if(!t) return;
   const g=id=>{ const el=document.getElementById(id); return el? el.value : '' };
   draft = {per:per, type:t.value, cat:g('fCat'), date:g('fDate'), amt:g('fAmt'), note:g('fNote')};
 }
-function shrinkImage(file, cb){
+function shrinkImage(file, cb, big){
+  const MX = big? DOC_MAX : IMG_MAX, LIM = big? DOC_LIMIT : IMG_LIMIT;
   if(!file || !/^image\//.test(file.type||'')){ alert('사진 파일만 첨부할 수 있습니다.'); return }
   const fr = new FileReader();
   fr.onload = function(){
     const img = new Image();
     img.onload = function(){
       try{
-        const sc = Math.min(1, IMG_MAX/Math.max(img.width, img.height));
+        const sc = Math.min(1, MX/Math.max(img.width, img.height));
         const c = document.createElement('canvas');
         c.width = Math.max(1, Math.round(img.width*sc));
         c.height = Math.max(1, Math.round(img.height*sc));
         c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
-        let q = 0.55, url = c.toDataURL('image/jpeg', q);
-        while(url.length > IMG_LIMIT && q > 0.3){ q -= 0.1; url = c.toDataURL('image/jpeg', q) }
-        if(url.length > IMG_LIMIT*1.6){ alert('사진이 너무 큽니다. 다른 사진을 써 주세요.'); return }
+        let q = big? 0.75 : 0.55, url = c.toDataURL('image/jpeg', q);
+        while(url.length > LIM && q > (big?0.45:0.3)){ q -= 0.1; url = c.toDataURL('image/jpeg', q) }
+        if(url.length > LIM*1.6){ alert('사진이 너무 큽니다. 다른 사진을 써 주세요.'); return }
         cb(url);
       }catch(e){ alert('사진을 처리하지 못했습니다.') }
     };
@@ -1767,7 +1772,7 @@ function vMemo(){
           <input type="file" id="moPicIn" accept="image/*" multiple style="display:none">
           <input type="file" id="moPicCamIn" accept="image/*" capture="environment" style="display:none">
         </span>
-        <button class="btn" id="moAdd">${ed?'수정':'추가'}</button>
+        <button class="btn" id="moAdd">${ed?'수정':'완료'}</button>
         ${ed?`<button class="btn g" id="moCancel">취소</button>`:''}
       </div>
       ${memoImgs.length?`<div class="fr">
@@ -1776,22 +1781,24 @@ function vMemo(){
         <button class="btn g sm" id="moPicClr">사진 모두 빼기</button>
         <button class="btn g sm" id="moPicPop">마지막 한 장 빼기</button>
       </div>`:''}
-      ${ed?'':`<p class="hint" style="margin:0">날짜는 오늘(${fmtDate(todayISO())})로 저절로 들어갑니다. 사진은 찍은 순서대로 쌓입니다.</p>`}
+      ${ed?'':`<p class="hint" style="margin:0">날짜는 오늘(${fmtDate(todayISO())})로 저절로 들어갑니다. 사진은 찍은 순서대로 쌓이며, 계약서 글자가 읽히도록 크게 저장됩니다.</p>`}
     </div>
 
-    <div class="scroll"><table class="lg">
-      <thead><tr><th style="width:70px">날짜</th><th>자료내용</th><th style="width:150px">기타</th>
-        <th class="c no-print" style="width:44px">사진</th><th class="no-print no-ro" style="width:64px"></th></tr></thead>
+    <div class="scroll"><table class="ml">
+      <thead><tr><th style="width:54px">날짜</th><th class="nw" style="width:132px">자료내용</th>
+        <th class="c no-print" style="width:44px">사진</th><th class="nw" style="width:100px">기타</th>
+        <th class="no-print no-ro" style="width:56px"></th></tr></thead>
       <tbody>
         ${list.map(e=>`<tr data-mrow="${e.id}">
           <td>${e.date?fmtDate(e.date):''}</td>
-          <td>${esc(e.text)}</td>
-          <td>${esc(e.etc)}</td>
+          <td class="nw">${esc(e.text)}</td>
           <td class="c no-print">${(e.imgs||[]).length?`<img class="thumb" src="${e.imgs[0]}" data-mimg="${e.id}" title="사진 ${e.imgs.length}장 — 눌러서 보기">${e.imgs.length>1?`<div class="cnt">${e.imgs.length}장</div>`:''}`:''}</td>
+          <td class="nw">${esc(e.etc)}</td>
           <td class="c no-print no-ro"><button class="btn g sm no-ro" data-med="${e.id}">✎</button>
             <button class="btn dg sm no-ro" data-mrm="${e.id}">×</button></td></tr>`).join('')}
         ${list.length?'':'<tr><td colspan="5" class="hint" style="padding:14px">아직 적어 둔 자료가 없습니다.</td></tr>'}
       </tbody></table></div>
+    ${list.length?'<p class="swipe">← 표를 옆으로 밀면 기타 내용을 볼 수 있습니다 →</p>':''}
   </div>
 
   <div class="card">
@@ -1864,15 +1871,15 @@ function vPlan(){
 
     <div class="row">
       <div class="col" style="flex:3;min-width:420px">
-        <div class="scroll"><table class="lg">
-          <thead><tr><th style="width:60px">날짜</th><th style="width:53px">항</th>
-            <th class="n" style="width:104px">금액</th><th style="width:170px">${noteLbl()}</th>
-            <th class="c no-print" style="width:44px">증빙</th><th class="n" style="width:108px">누계</th>
-            <th class="no-print no-ro" style="width:64px"></th></tr></thead>
+        <div class="scroll"><table class="pl">
+          <thead><tr><th style="width:54px">날짜</th><th class="nw" style="width:118px">항</th>
+            <th class="n" style="width:92px">금액</th><th style="width:110px">${noteLbl()}</th>
+            <th class="c no-print" style="width:38px">증빙</th><th class="n" style="width:92px">누계</th>
+            <th class="no-print no-ro" style="width:56px"></th></tr></thead>
           <tbody>
             ${(()=>{ let run=0; return list.map(e=>{ run+=Math.abs(+e.amount||0); return `<tr data-prow="${e.id}">
               <td>${e.date?e.date.slice(5).replace('-','/'):''}</td>
-              <td>${esc(e.cat)||'<span class="badge b-w">미지정</span>'}</td>
+              <td class="nw">${esc(e.cat)||'<span class="badge b-w">미지정</span>'}</td>
               <td class="n out">${won(e.amount)}</td>
               <td>${esc(e.note)}</td>
               <td class="c no-print">${e.img?`<img class="thumb" src="${e.img}" data-pimg="${e.id}" title="눌러서 크게 보기">`:''}</td>
@@ -1887,12 +1894,12 @@ function vPlan(){
       <div class="col" style="flex:2;min-width:330px">
         <div class="card" style="margin:0">
           <h2 style="font-size:14px">항목별 소계</h2>
-          <table class="ws"><thead><tr><th style="width:148px">지출</th>
+          <table class="ws"><thead><tr><th class="nw" style="width:150px">지출</th>
             <th class="n" style="width:78px">예정액</th><th class="n" style="width:78px">기지출</th>
             <th class="n" style="width:86px">미납금</th></tr></thead><tbody>
           ${S.expenseItems.map(it=>{
             const v=planSum(it.name), sp=spentOf(it.name), left=(+it.budget||0)-sp-v;
-            return `<tr><td>${esc(it.name)}</td>
+            return `<tr><td class="nw">${esc(it.name)}</td>
               <td class="n ${v?'out':''}">${v?won(v):'-'}</td>
               <td class="n ${sp?'out':''}">${sp?won(sp):'-'}</td>
               <td class="n ${left!==0?'out':''}">${won(left)}</td></tr>`}).join('')}
