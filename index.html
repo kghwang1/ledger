@@ -669,7 +669,7 @@ function setStatus(t){ const el=document.getElementById('hSt'); if(el) el.textCo
 window.addEventListener('beforeunload', e=>{ if(dirty){ e.preventDefault(); e.returnValue='' } });
 
 /* ───────── 서버(공유) 저장 ───────── */
-const APPVER = '2026.86';
+const APPVER = '2026.89';
 const LIBKEY = 'church_ledger_lib_v1';
 const DATASHEET = '_data', DATATAG = 'CHURCH_LEDGER_V1';
 const XLSXMIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -1136,6 +1136,7 @@ function render(){
       const t=todayPeriod();
       if(t){ per=t.k; mfil=t.m } 
       if(per==='DEC' && authRole==='home') per='Q1';
+      if(authRole==='home') { per='ALLQ'; mfil=0 }
       editId=null; formOpen=true;
     }
     tab=k; render(); window.scrollTo(0,0);
@@ -1968,6 +1969,101 @@ function vStatus(){
   ${orphanCount()?`<div class="note w">예산에 없는 항목으로 기록된 거래가 ${orphanCount()}건 있습니다. 각 기간에서 <span class="badge b-w">미등록</span> 표시를 확인하세요.</div>`:''}`;
 }
 
+/* ── 출납부 › 전체 보기 (가계부) ── */
+function vAllQ(){
+  const ks = P.filter(p=>!(p.k==='DEC' && authRole==='home')).map(p=>p.k);
+  let all = [];
+  ks.forEach(k=>ents(k).forEach(e=>all.push(Object.assign({_k:k}, e))));
+  all.sort((a,b)=>{ const dx=a.date||'9999', dy=b.date||'9999'; return dx<dy?-1:dx>dy?1:0 });
+  const open = opening(ks[0]);
+  const inc = all.filter(e=>e.type==='수입').reduce((t,e)=>t+Math.abs(+e.amount||0),0);
+  const exp = all.filter(e=>e.type==='지출').reduce((t,e)=>t+Math.abs(+e.amount||0),0);
+  const K = knownCats();
+  let bal = open;
+  const rows = all.map(e=>{ bal += sgn(e); return {e, bal} });
+  return `
+  ${pHead(`${S.meta.dept} 전체 내역`, '')}
+  <div class="card">
+    <h2 class="no-print">전체 내역 <span class="hint" style="display:inline">${all.length}건</span>
+      <button class="btn g sm" style="margin-left:10px;vertical-align:middle" onclick="window.print()">인쇄 (A4)</button></h2>
+
+    ${(formOpen||allMode||locked)?'':`<div class="tools no-print no-ro" style="margin-bottom:12px">
+      <button class="btn" id="fMore">＋ 계속 입력</button>
+      <span class="hint" style="margin:0">방금 넣은 내용이 아래에 표시됩니다.</span></div>`}
+    <div class="form no-print no-ro" ${(formOpen&&!locked)?'':'style="display:none"'}>
+      <div class="fr">
+        <div class="fi narrow"><label>관</label>
+          <select id="fType"><option>수입</option><option>지출</option></select></div>
+        <div class="fi f-hang"><label>항</label><select id="fCat"></select></div>
+        <div class="fi f-date"><label>날짜</label>
+          <input type="text" inputmode="numeric" id="fDate" placeholder="26.02.11" value="${fmtDate(todayISO())}"></div>
+        <div class="fi f-amt"><label>금액</label>
+          <input type="text" class="n" id="fAmt" placeholder="0"></div>
+      </div>
+      <div class="fr">
+        <div class="fi f-note"><label>산출근거</label>
+          <input type="text" id="fNote" placeholder="예: 원두 구입"></div>
+        <button class="btn" id="fAdd">추가</button>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="col" style="flex:3;min-width:330px">
+        <div class="scroll"><table class="pl">
+          <thead><tr><th style="width:54px">날짜</th><th class="nw" style="width:118px">항</th>
+            <th class="n" style="width:92px">금액</th><th style="width:110px">산출근거</th>
+            <th class="c no-print" style="width:38px">증빙</th><th class="n" style="width:92px">잔액</th>
+            <th class="no-print no-ro" style="width:56px"></th></tr></thead>
+          <tbody>
+            <tr class="sub"><td></td><td class="nw">이월금</td><td class="n">${won(open)}</td><td></td>
+              <td class="c no-print"></td><td class="n">${won(open)}</td><td class="no-print no-ro"></td></tr>
+            ${rows.map(({e,bal})=>`<tr data-qrow="${e._k}|${e.id}">
+              <td>${e.date?e.date.slice(5).replace('-','/'):''}</td>
+              <td class="nw"><span class="badge ${e.type==='수입'?'b-in':'b-out'}">${e.type}</span> ${esc(e.cat)}${e.cat&&!K.has(e.cat)?' <span class="badge b-w">미등록</span>':''}</td>
+              <td class="n ${e.type==='수입'?'in':'out'}">${e.type==='수입'?'':'-'}${won(e.amount)}</td>
+              <td>${esc(e.note)}</td>
+              <td class="c no-print">${e.img?`<img class="thumb" src="${e.img}" data-qimg="${e._k}|${e.id}" title="눌러서 크게 보기">`:''}</td>
+              <td class="n">${won(bal)}</td>
+              <td class="c no-print no-ro"><button class="btn g sm no-ro" data-qed="${e._k}|${e.id}">✎</button>
+                <button class="btn dg sm no-ro" data-qrm="${e._k}|${e.id}">×</button></td></tr>`).join('')}
+            <tr class="tot"><td colspan="2">수입 ${won(inc)} · 지출 ${won(exp)}</td><td class="n">${won(inc-exp)}</td><td></td>
+              <td class="c no-print"></td><td class="n">${won(closing(ks[ks.length-1]))}</td><td class="no-print no-ro"></td></tr>
+          </tbody></table></div>
+        ${all.length?'<p class="swipe">← 표를 옆으로 밀어 보세요 →</p>':'<p class="hint" style="margin-top:10px">아직 기록이 없습니다.</p>'}
+      </div>
+      <div class="col" style="flex:2;min-width:280px">
+        <div class="card" style="margin:0">
+          <h2 style="font-size:14px">전체 정산</h2>
+          <div class="kv"><span>이월금</span><b>${won(open)}</b></div>
+          <div class="kv"><span class="in">수입 계</span><b class="in">${won(inc)}</b></div>
+          <div class="kv"><span class="out">지출 계</span><b class="out">-${won(exp)}</b></div>
+          <div class="kv" style="border:0"><span><b>잔고</b></span><b class="big">${won(closing(ks[ks.length-1]))}</b></div>
+        </div>
+        ${itemPanelAll()}
+      </div>
+    </div>
+    <div class="print-only">${signBox()}</div>
+  </div>`;
+}
+function itemPanelAll(){
+  const ks = P.filter(p=>!(p.k==='DEC' && authRole==='home')).map(p=>p.k);
+  const sum = (cat, ex) => { const v = ks.reduce((t,k)=>t+catSum(k,cat),0); return ex? -v : v };
+  const si = incOther().reduce((t,i)=>t+sum(i.name,false),0);
+  const se = S.expenseItems.reduce((t,i)=>t+sum(i.name,true),0);
+  const row = (arr,cls,ex)=>arr.map(it=>{ const v=sum(it.name,ex);
+    return `<tr><td class="nw">${esc(it.name)}</td><td class="n ${v?cls:''}">${v?won(v):'-'}</td></tr>` }).join('');
+  return `<div class="card" style="margin-top:16px">
+    <h2 style="font-size:14px">항목별 소계</h2>
+    <table class="ws"><thead><tr><th class="nw" style="width:150px">수입</th><th class="n" style="width:100px">합계</th></tr></thead><tbody>
+    ${row(incOther(),'in',false)}
+    <tr class="sub"><td>계</td><td class="n">${won(si)}</td></tr>
+    </tbody></table>
+    <table class="ws" style="margin-top:12px"><thead><tr><th class="nw" style="width:150px">지출</th><th class="n" style="width:100px">합계</th></tr></thead><tbody>
+    ${row(S.expenseItems,'out',true)}
+    <tr class="sub"><td>계</td><td class="n">${won(se)}</td></tr>
+    </tbody></table></div>`;
+}
+
 /* ── 출납부 › 전체 출력 ── */
 function vAll(){
   const keep = per, keepF = formOpen, keepM = mfil;
@@ -1986,11 +2082,14 @@ function vAll(){
 /* ── 출납부 ── */
 function vLedger(){
   const chips = `<div class="chips no-print">
-    <button class="chip ${per==='SUM'?'on':''}" data-per="SUM">현재 상황</button>
+    ${authRole==='home'
+      ? `<button class="chip ${per==='ALLQ'?'on':''}" data-per="ALLQ">전체</button>`
+      : `<button class="chip ${per==='SUM'?'on':''}" data-per="SUM">현재 상황</button>`}
     ${P.filter(x=>!(x.k==='DEC' && authRole==='home')).map(x=>`<button class="chip ${x.k===per?'on':''}" data-per="${x.k}" title="${x.d(S.meta.year)}">${pLabel(x)}</button>`).join('')}
     <button class="chip ${per==='ALL'?'on':''}" data-per="ALL">출납부 출력</button>
   </div>`;
   if(per==='SUM') return chips + vStatus();
+  if(per==='ALLQ') return chips + vAllQ();
   if(per==='ALL') return chips + vAll();
   const p = P.find(x=>x.k===per);
   const list = sorted(per);
@@ -2681,6 +2780,15 @@ function bind(){
   on('[data-rm]','click',e=>{ const id=e.target.dataset.rm;
     if(!confirm('이 거래를 삭제할까요?')) return;
     S.entries[per]=ents(per).filter(x=>x.id!==id); if(editId===id) editId=null; save(); render() });
+  on('[data-qed]','click',e=>{ const p=e.target.dataset.qed.split('|');
+    per=p[0]; editId=p[1]; draft=null; formOpen=true; mfil=0;
+    const t=ents(per).find(x=>x.id===editId); formImg = t&&t.img ? t.img : '';
+    render(); const el=$('#fAmt'); if(el) el.focus() });
+  on('[data-qrm]','click',e=>{ const p=e.target.dataset.qrm.split('|');
+    if(!confirm('이 거래를 삭제할까요?')) return;
+    S.entries[p[0]]=ents(p[0]).filter(x=>x.id!==p[1]); save(); render() });
+  on('[data-qimg]','click',e=>{ const p=e.target.dataset.qimg.split('|');
+    const t=ents(p[0]).find(x=>x.id===p[1]); if(t&&t.img) showImg(t.img) });
   on('[data-ed]','click',e=>{ editId=e.target.dataset.ed; draft=null; formOpen=true;
     const t=ents(per).find(x=>x.id===editId); formImg = t&&t.img ? t.img : '';
     render(); const el=$('#fAmt'); if(el) el.focus() });
@@ -2688,9 +2796,10 @@ function bind(){
 
   const ft=$('#fType');
   if(ft){
+    const inAll = (per==='ALLQ');
     const fill=()=>{
       const list = ft.value==='수입'? S.incomeItems : S.expenseItems;
-      const cur = editId ? (ents(per).find(x=>x.id===editId)||{}).cat
+      const cur = (editId && !inAll) ? (ents(per).find(x=>x.id===editId)||{}).cat
                         : (draft && draft.per===per ? draft.cat : null);
       $('#fCat').innerHTML = list.length
         ? list.map(i=>`<option ${i.name===cur?'selected':''}>${esc(i.name)}</option>`).join('')
@@ -2708,18 +2817,19 @@ function bind(){
         alert(`${S.meta.year}년 회계기간에 없는 날짜입니다.\n${S.meta.year-1}.12.1 ~ ${S.meta.year}.12.31 사이로 넣어 주세요.`);
         $('#fDate').focus(); return;
       }
-      if(tgt !== per && !confirm(`입력 기간이 맞지 않습니다.\n${periodName(tgt)}에 이동하여 저장할까요?`)) return;
+      if(!inAll && tgt !== per && !confirm(`입력 기간이 맞지 않습니다.\n${periodName(tgt)}에 이동하여 저장할까요?`)) return;
 
       const rec={type:ft.value,cat,date:iso,amount:Math.abs(amt),note:$('#fNote').value.trim(),img:formImg||''};
       if(editId){
-        S.entries[per] = ents(per).filter(x=>x.id!==editId);       // 기간이 바뀌면 옮겨 준다
+        P.forEach(p=>{ S.entries[p.k] = ents(p.k).filter(x=>x.id!==editId) });   // 기간이 바뀌면 옮겨 준다
         S.entries[tgt].push(Object.assign({id:editId},rec));
         lastAdd=editId; editId=null;
       } else {
         const id=uid(); S.entries[tgt].push(Object.assign({id},rec)); lastAdd=id;
       }
       formImg=''; draft=null;
-      if(tgt !== per){ per = tgt; mfil = 0; }                      // 맞는 기간으로 이동
+      if(inAll){ /* 전체 보기에서는 화면을 그대로 둔다 */ }
+      else if(tgt !== per){ per = tgt; mfil = 0; }                 // 맞는 기간으로 이동
       else if(mfil && +iso.slice(5,7)!==mfil) mfil=0;              // 걸러져 안 보이면 필터 해제
       formOpen=false;                                             // 입력창을 접어 결과가 보이게
       try{ if(document.activeElement && document.activeElement.blur) document.activeElement.blur() }catch(e){}
