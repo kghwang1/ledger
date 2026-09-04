@@ -651,7 +651,7 @@ function setStatus(t){ const el=document.getElementById('hSt'); if(el) el.textCo
 window.addEventListener('beforeunload', e=>{ if(dirty){ e.preventDefault(); e.returnValue='' } });
 
 /* ───────── 서버(공유) 저장 ───────── */
-const APPVER = '2026.69';
+const APPVER = '2026.71';
 const LIBKEY = 'church_ledger_lib_v1';
 const DATASHEET = '_data', DATATAG = 'CHURCH_LEDGER_V1';
 const XLSXMIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -1070,14 +1070,15 @@ function render(){
     return;
   }
   if(hd) hd.style.display='';
+  if(tab==='next' && authRole==='home') tab='guide';
   document.getElementById('hTitle').textContent = ro
     ? `${S.meta.year}년 ${roName} 자료열람`
     : `${S.meta.year}년 ${S.meta.dept||'부서'} 회계장부`;
-  document.getElementById('hSub').textContent = S.meta.church || '';
+  document.getElementById('hSub').textContent = (authRole==='home') ? '' : (S.meta.church || '');
   document.body.classList.toggle('viewing', !!(ro || guideMode==='view'));
 
   document.getElementById('nav').innerHTML =
-    TABS.filter(([k])=>!(k==='data' && (guideMode==='view'||ro)))
+    TABS.filter(([k])=>!(k==='data' && (guideMode==='view'||ro)) && !(k==='next' && authRole==='home'))
         .map(([k,l])=>`<button data-tab="${k}" class="${tab===k?'on':''}">${l}</button>`).join('')
     ;
   document.getElementById('hSave').innerHTML =
@@ -1320,7 +1321,7 @@ function vPrint(){
     per=keep; formOpen=keepF; mfil=keepM; allMode=false;
   }
   if(prSel.settle) out += `<div class="psec">${stripTools(vSettle())}</div>`;
-  if(prSel.next)   out += `<div class="psec">${stripTools(vNext())}</div>`;
+  if(prSel.next && authRole!=='home') out += `<div class="psec">${stripTools(vNext())}</div>`;
   if(!out) out = `<p class="hint">인쇄할 항목을 하나 이상 고르세요.</p>`;
   return `<div class="tools no-print">
       <span class="hint" style="margin:0">고른 자료를 이어서 인쇄합니다.</span>
@@ -1422,7 +1423,8 @@ function fileBox(){
   </div>`;
 }
 function printBox(){
-  const it=[['cover','표지'],['budget','예산'],['ledger','출납부'],['settle','결산'],['next','새해예산요구']];
+  const it=[['cover','표지'],['budget','예산'],['ledger','출납부'],['settle','결산']]
+    .concat(authRole==='home'?[]:[['next','새해예산요구']]);
   const all = it.every(x=>prSel[x[0]]);
   return `<div class="opb no-print no-ro" style="align-items:flex-start">
     <b style="font-size:13.5px;padding-top:3px">인쇄</b>
@@ -1468,8 +1470,13 @@ function vGuide(){
       <p class="hint">회계기간은 ${S.meta.year}.1.1 ~ ${S.meta.year}.12.31 입니다.</p>
       <div class="row">
         <div class="col" style="min-width:120px"><label class="hint" style="margin:0">회계연도</label><input type="number" data-meta="year" value="${S.meta.year}"></div>
-        <div class="col" style="min-width:120px"><label class="hint" style="margin:0">작성 부서</label><input type="text" data-meta="dept" value="${S.meta.dept}" placeholder="예: 유초등부"></div>
+        <div class="col" style="min-width:120px"><label class="hint" style="margin:0">작성 부서
+          ${authDept?'<span class="badge b-ok">시작 화면에서 고름</span>':''}</label>
+          ${authDept
+            ? `<input type="text" value="${esc(S.meta.dept)}" disabled title="시작 화면에서 고른 이름입니다. 바꾸려면 종료 후 다시 고르세요.">`
+            : `<input type="text" data-meta="dept" value="${esc(S.meta.dept)}" placeholder="예: 유초등부">`}</div>
       </div>
+      ${authDept?`<p class="hint" style="margin:6px 0 0">부서명은 저장 파일 이름이 되므로 여기서 바꿀 수 없습니다.</p>`:''}
       <div class="row" style="margin-top:12px">
         <div class="col" style="min-width:120px"><label class="hint" style="margin:0">작성자</label>
           <input type="text" data-meta="writer" value="${esc(S.meta.writer||'')}" placeholder="이름"></div>
@@ -2383,6 +2390,8 @@ function bindCover(){
       const rec = (preKey===selFile && prePromise) ? (await prePromise) || (await getRec(selFile))
                                                   : (await getRec(selFile));
       S=norm(rec.data); curFile=`${p[0]}_${p[1]}`;
+      S.meta.dept = p[0];                              // 파일 이름과 부서명을 항상 맞춘다
+      S.meta.year = Number(p[1]) || S.meta.year;
       if(authRole==='view'){ ro=true; roName=p[0]; guideMode='view' }
       else { ro=false; guideMode='edit'; if(authRole!=='home' && authName) S.meta.writer=S.meta.writer||authName }
       cvMsg=''; enterApp();
