@@ -666,7 +666,7 @@ function setStatus(t){ const el=document.getElementById('hSt'); if(el) el.textCo
 window.addEventListener('beforeunload', e=>{ if(dirty){ e.preventDefault(); e.returnValue='' } });
 
 /* ───────── 서버(공유) 저장 ───────── */
-const APPVER = '2026.81';
+const APPVER = '2026.83';
 const LIBKEY = 'church_ledger_lib_v1';
 const DATASHEET = '_data', DATATAG = 'CHURCH_LEDGER_V1';
 const XLSXMIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -1815,6 +1815,10 @@ function noteLbl(){ return authRole==='home' ? '세부내역' : '산출근거' }
 function spentAll(){                     // 출납부에 적힌 지출 전체
   return P.reduce((t,p)=>t+ents(p.k).filter(e=>e.type==='지출').reduce((x,e)=>x+Math.abs(+e.amount||0),0),0);
 }
+function spentOf(cat){                   // 항목별 출납부 지출
+  return P.reduce((t,p)=>t+ents(p.k).filter(e=>e.type==='지출'&&e.cat===cat)
+    .reduce((x,e)=>x+Math.abs(+e.amount||0),0),0);
+}
 function planSum(cat){ return (S.plan||[]).filter(e=>!cat||e.cat===cat).reduce((t,e)=>t+Math.abs(+e.amount||0),0) }
 function vPlan(){
   const list = planList(), ed = planEdit ? (S.plan||[]).find(e=>e.id===planEdit) : null;
@@ -1861,7 +1865,7 @@ function vPlan(){
     <div class="row">
       <div class="col" style="flex:3;min-width:420px">
         <div class="scroll"><table class="lg">
-          <thead><tr><th style="width:60px">날짜</th><th style="width:150px">항</th>
+          <thead><tr><th style="width:60px">날짜</th><th style="width:53px">항</th>
             <th class="n" style="width:104px">금액</th><th style="width:170px">${noteLbl()}</th>
             <th class="c no-print" style="width:44px">증빙</th><th class="n" style="width:108px">누계</th>
             <th class="no-print no-ro" style="width:64px"></th></tr></thead>
@@ -1880,14 +1884,22 @@ function vPlan(){
         ${list.length?'<p class="swipe">← 표를 옆으로 밀어 보세요 →</p>':'<p class="hint" style="margin-top:10px">아직 적어 둔 지출예정이 없습니다.</p>'}
       </div>
 
-      <div class="col" style="flex:2;min-width:280px">
+      <div class="col" style="flex:2;min-width:330px">
         <div class="card" style="margin:0">
           <h2 style="font-size:14px">항목별 소계</h2>
-          <table><thead><tr><th>지출</th><th class="n">예정액</th></tr></thead><tbody>
-          ${S.expenseItems.map(it=>{const v=planSum(it.name);
-            return `<tr><td>${esc(it.name)}</td><td class="n ${v?'out':''}">${v?won(v):'-'}</td></tr>`}).join('')}
-          <tr class="sub"><td>계</td><td class="n">${won(total)}</td></tr>
+          <table class="ws"><thead><tr><th style="width:148px">지출</th>
+            <th class="n" style="width:78px">예정액</th><th class="n" style="width:78px">기지출</th>
+            <th class="n" style="width:86px">미납금</th></tr></thead><tbody>
+          ${S.expenseItems.map(it=>{
+            const v=planSum(it.name), sp=spentOf(it.name), left=(+it.budget||0)-sp-v;
+            return `<tr><td>${esc(it.name)}</td>
+              <td class="n ${v?'out':''}">${v?won(v):'-'}</td>
+              <td class="n ${sp?'out':''}">${sp?won(sp):'-'}</td>
+              <td class="n ${left!==0?'out':''}">${won(left)}</td></tr>`}).join('')}
+          <tr class="sub"><td>계</td><td class="n">${won(total)}</td><td class="n">${won(spentAll())}</td>
+            <td class="n ${budg-spentAll()-total!==0?'out':''}">${won(budg-spentAll()-total)}</td></tr>
           </tbody></table>
+          <p class="swipe">← 표를 옆으로 밀어 보세요 →</p>
           <div class="kv" style="margin-top:14px"><span style="font-size:110%"><b>지출합계</b></span>
             <b style="font-size:110%">${won(spentAll()+total)}</b></div>
           <div class="hint" style="margin:2px 0 0">출납부 지출 ${won(spentAll())} + 지출예정 ${won(total)}</div>
