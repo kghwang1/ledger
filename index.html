@@ -166,6 +166,8 @@ ol.steps small{color:var(--mute);display:block}
 .dchip{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line);
   border-radius:20px;padding:5px 8px 5px 13px;font-size:13px;color:var(--ink2);background:#fff}
 .dchip button{border:0;background:none;color:var(--out);cursor:pointer;font-size:14px;line-height:1;padding:0 2px}
+.diag{background:#f6f7f9;border:1px solid var(--line);border-radius:8px;padding:12px;
+  font-size:12px;white-space:pre-wrap;word-break:break-all;margin:12px 0 0;font-family:inherit;line-height:1.6}
 .dchip button.dv{font-size:11px;font-weight:600;color:var(--in);background:var(--in-bg);
   border-radius:10px;padding:2px 7px}
 .dchip.nv{color:var(--mute)}
@@ -649,7 +651,7 @@ function setStatus(t){ const el=document.getElementById('hSt'); if(el) el.textCo
 window.addEventListener('beforeunload', e=>{ if(dirty){ e.preventDefault(); e.returnValue='' } });
 
 /* ───────── 서버(공유) 저장 ───────── */
-const APPVER = '2026.68';
+const APPVER = '2026.69';
 const LIBKEY = 'church_ledger_lib_v1';
 const DATASHEET = '_data', DATATAG = 'CHURCH_LEDGER_V1';
 const XLSXMIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -823,13 +825,14 @@ async function api(action, body){
 const USERKEY='_users', CACHEKEY='church_ledger_cache_v1', FILEKEY='church_ledger_file_';
 let preKey='', prePromise=null;                    // 미리 받아오는 중인 파일
 let listFresh=false;                               // 목록을 서버에서 새로 받았는가
+let diagMsg='';
 function fileAt(key){ const x=(deptList||[]).find(d=>d.name+'|'+d.year===key); return x? (x.at||0) : 0 }
 async function getRec(key){
   const p=key.split('|'), nm=p[0], yr=Number(p[1]);
   if(listFresh){                                   // 목록을 새로 받은 뒤에만 기억해 둔 것을 쓴다
     try{
       const t=await store.get(FILEKEY+key);
-      if(t){ const c=JSON.parse(t); if(c && c.at && c.at===fileAt(key)) return c.rec }
+      if(t && t!==''){ const c=JSON.parse(t); if(c && c.at && c.at===fileAt(key)) return c.rec }
     }catch(e){}
   }
   const j=await api('get',{name:nm, year:yr});
@@ -845,7 +848,7 @@ async function saveCache(){
 }
 async function loadCache(){
   try{
-    const t = await store.get(CACHEKEY); if(!t) return false;
+    const t = await store.get(CACHEKEY); if(!t || t==='') return false;
     const c = JSON.parse(t);
     if(Array.isArray(c.depts)) deptList = c.depts;
     if(Array.isArray(c.users)) users = c.users;
@@ -894,6 +897,13 @@ async function loadDeptList(){
     deptList = (j.list||[]).filter(x=>String(x.name).charAt(0)!=='_'); listFresh=true }
   catch(e){ deptList=[]; listFresh=false }
 }
+function countAll(dd){                    // 자료가 제대로 오갔는지 견주어 볼 숫자
+  if(!dd) return -1;
+  let n=0;
+  ['DEC','Q1','Q2','Q3','Q4'].forEach(k=>{ n += ((dd.entries&&dd.entries[k])||[]).length });
+  n += (dd.plan||[]).length + (dd.incomeItems||[]).length + (dd.expenseItems||[]).length;
+  return n;
+}
 async function srvSave(silent){
   if(ro){ alert('열람 중인 다른 부서 자료는 저장할 수 없습니다.'); return false }
   if(!serverOn()){ if(!silent) alert('서버 주소가 설정되지 않았습니다.\n데이터 탭에서 주소를 넣어 주세요.'); return false }
@@ -901,11 +911,26 @@ async function srvSave(silent){
   setStatus('서버에 저장 중…');
   try{
     await api('save', {name:deptName(), year:S.meta.year, data:S});
+
+    // 서버에 제대로 들어갔는지 다시 읽어 확인한다
+    const mine = countAll(S);
+    let back=null;
+    try{ const j = await api('get', {name:deptName(), year:S.meta.year}); back = j.rec }catch(e){}
+    if(!back || countAll(back.data) !== mine){
+      setStatus('⚠ 저장 확인 실패');
+      alert('서버에 저장했지만 확인이 되지 않습니다.\n\n'
+        + `보낸 자료: ${mine}건\n`
+        + (back? `서버 자료: ${countAll(back.data)}건` : '서버에서 읽지 못함')
+        + '\n\n구글 드라이브에 같은 이름의 파일이 여러 개 있는지 확인해 주세요.\n'
+        + `찾는 이름: ${deptName()}_${S.meta.year}.json`);
+      render(); return false;
+    }
+
     await loadDeptList(); saveCache();
     try{ const k=deptName()+'|'+S.meta.year;
-      await store.set(FILEKEY+k, JSON.stringify({at:fileAt(k), rec:{name:deptName(),year:S.meta.year,at:fileAt(k),data:S}}));
+      await store.set(FILEKEY+k, JSON.stringify({at:fileAt(k), rec:back}));
     }catch(e){}
-    srvMsg = `${S.meta.year}년 ${deptName()} 자료를 서버에 저장했습니다 · ${nowT()}`;
+    srvMsg = `${S.meta.year}년 ${deptName()} 자료를 서버에 저장했습니다 (${mine}건 확인) · ${nowT()}`;
     setStatus('서버 저장됨 · '+nowT()); render(); return true;
   }catch(e){
     setStatus('⚠ 서버 저장 실패');
@@ -2107,6 +2132,11 @@ function vData(){
       <input type="text" data-meta="server" value="${esc(S.meta.server||'')}" placeholder="${SERVER_URL||'https://script.google.com/macros/s/.../exec'}">
     </div>
     <p class="hint" style="margin:8px 0 0">${SERVER_URL?`프로그램에 주소가 들어 있습니다. 위 칸은 비워 두시면 그대로 쓰입니다.`:`아직 프로그램에 주소가 없습니다. 위 칸에 넣으면 이 기기에서만 쓰입니다.`}</p>
+    <div class="tools" style="margin-top:12px">
+      <button class="btn g" id="diagBtn">서버 점검</button>
+      <button class="btn g" id="clrCache">기억해 둔 자료 지우기</button>
+    </div>
+    ${diagMsg?`<pre class="diag">${esc(diagMsg)}</pre>`:''}
   </div>
 
   <div class="card">
@@ -2625,6 +2655,38 @@ function bind(){
   on('[data-udel]','click',e=>{ users.splice(+e.target.dataset.udel,1); render() });
   if($('#uSave')) $('#uSave').onclick=async()=>{ if(await saveUsers()){ srvMsg='설정을 서버에 저장했습니다.'; render() } };
   if($('#uLoad')) $('#uLoad').onclick=async()=>{ await loadUsers(); srvMsg='설정을 다시 읽었습니다.'; render() };
+  if($('#diagBtn')) $('#diagBtn').onclick=async()=>{
+    diagMsg='점검 중입니다…'; render();
+    const L=[];
+    L.push('부서명 : '+(deptName()||'(없음)'));
+    L.push('연도   : '+S.meta.year);
+    L.push('찾는 파일 : '+deptName()+'_'+S.meta.year+'.json');
+    L.push('지금 화면 자료 : '+countAll(S)+'건');
+    try{
+      const j=await api('list');
+      const all=(j.list||[]).filter(x=>x.name===deptName());
+      L.push('서버 목록에서 찾음 : '+all.length+'개');
+      all.forEach(x=>L.push('   '+x.name+'_'+x.year+'  저장시각 '+new Date(x.at).toLocaleString('ko-KR')));
+    }catch(e){ L.push('목록 읽기 실패 : '+(e&&e.message?e.message:e)) }
+    try{
+      const j=await api('get',{name:deptName(), year:S.meta.year});
+      L.push('서버 자료 : '+countAll(j.rec.data)+'건');
+      L.push('서버 저장시각 : '+new Date(j.rec.at).toLocaleString('ko-KR'));
+      const ent=['DEC','Q1','Q2','Q3','Q4'].map(k=>k+'='+((j.rec.data.entries&&j.rec.data.entries[k])||[]).length).join(' ');
+      L.push('   거래 '+ent+'  지출예정='+((j.rec.data.plan||[]).length));
+      L.push(countAll(j.rec.data)===countAll(S) ? '→ 화면과 서버가 같습니다.' : '→ 화면과 서버가 다릅니다. [저장]을 눌러 주세요.');
+    }catch(e){ L.push('자료 읽기 실패 : '+(e&&e.message?e.message:e)) }
+    L.push('프로그램 버전 : '+APPVER);
+    diagMsg=L.join('\n'); render();
+  };
+  if($('#clrCache')) $('#clrCache').onclick=async()=>{
+    if(!confirm('이 기기가 기억해 둔 자료를 모두 지웁니다.\n서버 자료는 그대로입니다. 계속할까요?')) return;
+    try{ await store.set(CACHEKEY,''); }catch(e){}
+    const k=deptName()+'|'+S.meta.year;
+    try{ await store.set(FILEKEY+k,''); }catch(e){}
+    listFresh=false; preKey=''; prePromise=null;
+    diagMsg='기억해 둔 자료를 지웠습니다. 종료했다 다시 여시면 서버에서 새로 읽습니다.'; render();
+  };
   if($('#chkUpd')) $('#chkUpd').onclick=()=>checkUpdate(true);
   if($('#doUpd2')) $('#doUpd2').onclick=applyUpdate;
   if($('#sRefresh')) $('#sRefresh').onclick=async()=>{ await loadDeptList(); srvMsg='목록을 새로 읽었습니다.'; render() };
