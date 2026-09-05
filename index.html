@@ -221,6 +221,16 @@ ol.steps small{color:var(--mute);display:block}
 .imgov .ovmain{display:flex;align-items:center;gap:10px;width:100%;max-width:820px;justify-content:center}
 .imgov .ovp,.imgov .ovnx{background:rgba(255,255,255,.18);color:#fff;border:0;border-radius:50%;
   width:44px;height:44px;font-size:26px;line-height:1;cursor:pointer;flex:none}
+.imgov .ovwrap{flex:1;min-width:0;overflow:hidden;display:flex;align-items:center;justify-content:center;
+  max-height:72vh;touch-action:none}
+.imgov .ovwrap img{transition:transform .12s;transform-origin:center center;
+  user-select:none;-webkit-user-drag:none}
+.imgov .ovz{display:flex;align-items:center;gap:6px}
+.imgov .ovz button{background:rgba(255,255,255,.2);color:#fff;border:0;border-radius:7px;padding:6px 11px;
+  font-size:14px;font-weight:600;cursor:pointer;font-family:inherit}
+.imgov .ovpc{color:#fff;font-size:12.5px;min-width:44px;text-align:center}
+.imgov .ovtip{color:#cfd6d3;font-size:12px;text-align:center;max-width:820px}
+@media(max-width:560px){ .imgov .ovz button{padding:6px 9px;font-size:13px} .imgov .ovbar{gap:8px} }
 .thumbs{display:flex;gap:5px;align-items:center;flex-wrap:wrap}
 .thumbs .cnt{font-size:11.5px;color:var(--mute)}
 .thumb{width:26px;height:26px;object-fit:cover;border-radius:4px;border:1px solid var(--line);cursor:pointer;vertical-align:middle}
@@ -237,6 +247,7 @@ ol.steps small{color:var(--mute);display:block}
   table.ws{min-width:290px}          /* 현재 상황·소계 */
   table.pl{min-width:560px}          /* 지출예정 내역 */
   table.ml{min-width:386px}          /* 자료 */
+  table.wp{min-width:480px}          /* 지출예정 소계 */
   table.we{min-width:400px}          /* 결산 (수입·지출 같은 폭) */
   table.wi2{min-width:200px}         /* 수입 계획 */
 }
@@ -270,7 +281,7 @@ ol.steps small{color:var(--mute);display:block}
   .row.two table.wn th,.row.two table.wn td{padding:2px}
   .scroll{max-height:none;overflow:visible;border:0;border-radius:0}
   table{width:100%;max-width:100%;font-size:9pt;border-collapse:collapse}
-  table.lg,table.wt,table.wb,table.wn,table.ws,table.pl,table.ml,table.we,table.wi2{min-width:0!important}
+  table.lg,table.wt,table.wb,table.wn,table.ws,table.pl,table.ml,table.wp,table.we,table.wi2{min-width:0!important}
   .card{overflow:visible!important}
   .swipe{display:none!important}
   .pgbreak{break-before:page;page-break-before:always}
@@ -669,7 +680,7 @@ function setStatus(t){ const el=document.getElementById('hSt'); if(el) el.textCo
 window.addEventListener('beforeunload', e=>{ if(dirty){ e.preventDefault(); e.returnValue='' } });
 
 /* ───────── 서버(공유) 저장 ───────── */
-const APPVER = '2026.91';
+const APPVER = '2026.95';
 const LIBKEY = 'church_ledger_lib_v1';
 const DATASHEET = '_data', DATATAG = 'CHURCH_LEDGER_V1';
 const XLSXMIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -1715,32 +1726,92 @@ function showImgs(list, idx){
   list = (list||[]).filter(x=>x);
   if(!list.length) return;
   let i = Math.max(0, Math.min(idx||0, list.length-1));
+  let sc = 1, tx = 0, ty = 0;                       // 확대 배율·움직인 거리
+
   const ov = document.createElement('div');
   ov.className = 'imgov';
   ov.innerHTML =
-    '<div class="ovbar"><span class="ovn"></span><button class="ovx">닫기</button></div>'
-    + '<div class="ovmain"><button class="ovp">‹</button><img><button class="ovnx">›</button></div>';
-  const img = ov.querySelector('img'), num = ov.querySelector('.ovn');
-  const draw = ()=>{ img.src = list[i]; num.textContent = (i+1)+' / '+list.length;
-    ov.querySelector('.ovp').style.visibility = list.length>1?'visible':'hidden';
-    ov.querySelector('.ovnx').style.visibility = list.length>1?'visible':'hidden'; };
-  const go = d => { i = (i + d + list.length) % list.length; draw() };
-  ov.querySelector('.ovp').onclick = e=>{ e.stopPropagation(); go(-1) };
-  ov.querySelector('.ovnx').onclick = e=>{ e.stopPropagation(); go(1) };
-  ov.querySelector('.ovx').onclick = ()=>close();
-  ov.onclick = e=>{ if(e.target===ov || e.target===ov.querySelector('.ovmain')) close() };
-  let sx=0;
-  ov.addEventListener('touchstart', e=>{ sx = e.touches[0].clientX }, {passive:true});
-  ov.addEventListener('touchend', e=>{                       // 손가락으로 넘기기
-    const dx = e.changedTouches[0].clientX - sx;
-    if(Math.abs(dx)>40) go(dx<0?1:-1);
+    '<div class="ovbar"><span class="ovn"></span>'
+    + '<span class="ovz"><button class="ovout">－</button><span class="ovpc">100%</span>'
+    + '<button class="ovin">＋</button><button class="ovfit">원래대로</button></span>'
+    + '<button class="ovx">닫기</button></div>'
+    + '<div class="ovmain"><button class="ovp">‹</button>'
+    + '<div class="ovwrap"><img></div><button class="ovnx">›</button></div>'
+    + '<div class="ovtip"></div>';
+
+  const img  = ov.querySelector('img');
+  const wrap = ov.querySelector('.ovwrap');
+  const num  = ov.querySelector('.ovn');
+  const pc   = ov.querySelector('.ovpc');
+  const tip  = ov.querySelector('.ovtip');
+
+  function apply(){
+    img.style.transform = 'translate('+tx+'px,'+ty+'px) scale('+sc+')';
+    pc.textContent = Math.round(sc*100)+'%';
+    wrap.style.cursor = sc>1 ? 'grab' : 'zoom-in';
+    tip.textContent = sc>1 ? '끌어서 움직이세요. 넘기려면 먼저 [원래대로]를 누르세요.'
+                           : (list.length>1 ? '옆으로 밀거나 화살표로 넘깁니다. 사진을 누르면 커집니다.' : '사진을 누르면 커집니다.');
+  }
+  function zoom(v){ sc = Math.max(1, Math.min(5, v)); if(sc===1){ tx=0; ty=0 } apply() }
+  function draw(){
+    img.src = list[i]; num.textContent = (i+1)+' / '+list.length;
+    ov.querySelector('.ovp').style.visibility  = list.length>1?'visible':'hidden';
+    ov.querySelector('.ovnx').style.visibility = list.length>1?'visible':'hidden';
+    zoom(1);                                        // 사진을 바꾸면 배율을 되돌린다
+  }
+  function go(d){ if(sc>1) return; i=(i+d+list.length)%list.length; draw() }
+
+  ov.querySelector('.ovp').onclick   = function(e){ e.stopPropagation(); go(-1) };
+  ov.querySelector('.ovnx').onclick  = function(e){ e.stopPropagation(); go(1) };
+  ov.querySelector('.ovin').onclick  = function(e){ e.stopPropagation(); zoom(sc+0.5) };
+  ov.querySelector('.ovout').onclick = function(e){ e.stopPropagation(); zoom(sc-0.5) };
+  ov.querySelector('.ovfit').onclick = function(e){ e.stopPropagation(); zoom(1) };
+  ov.querySelector('.ovx').onclick   = function(){ close() };
+  ov.onclick = function(e){ if(e.target===ov || e.target===ov.querySelector('.ovmain')) close() };
+  img.onclick = function(e){ e.stopPropagation(); zoom(sc>1 ? 1 : 2) };
+
+  var sx=0, sy=0, px=0, py=0, multi=false;
+  wrap.addEventListener('touchstart', function(e){
+    multi = e.touches.length>1;
+    if(multi) return;
+    sx=e.touches[0].clientX; sy=e.touches[0].clientY; px=tx; py=ty;
   }, {passive:true});
-  function onKey(ev){ if(ev.key==='ArrowLeft') go(-1); else if(ev.key==='ArrowRight') go(1); else if(ev.key==='Escape') close() }
-  function close(){ document.removeEventListener('keydown', onKey); ov.remove() }
+  wrap.addEventListener('touchmove', function(e){
+    if(e.touches.length>1){ multi=true; return }
+    if(sc>1){ tx=px+(e.touches[0].clientX-sx); ty=py+(e.touches[0].clientY-sy); apply() }
+  }, {passive:true});
+  wrap.addEventListener('touchend', function(e){
+    if(multi || sc>1) return;                       // 두 손가락이거나 확대 중이면 넘기지 않는다
+    var t=e.changedTouches[0], dx=t.clientX-sx, dy=t.clientY-sy;
+    if(Math.abs(dx)>60 && Math.abs(dx)>Math.abs(dy)*1.5) go(dx<0?1:-1);
+  }, {passive:true});
+
+  var dragging=false;
+  wrap.addEventListener('mousedown', function(e){ if(sc<=1) return;
+    dragging=true; sx=e.clientX; sy=e.clientY; px=tx; py=ty; e.preventDefault() });
+  function onMove(e){ if(!dragging) return; tx=px+(e.clientX-sx); ty=py+(e.clientY-sy); apply() }
+  function onUp(){ dragging=false }
+  window.addEventListener('mousemove', onMove);
+  window.addEventListener('mouseup', onUp);
+
+  function onKey(ev){
+    if(ev.key==='ArrowLeft') go(-1);
+    else if(ev.key==='ArrowRight') go(1);
+    else if(ev.key==='+'||ev.key==='=') zoom(sc+0.5);
+    else if(ev.key==='-') zoom(sc-0.5);
+    else if(ev.key==='Escape') close();
+  }
+  function close(){
+    document.removeEventListener('keydown', onKey);
+    window.removeEventListener('mousemove', onMove);
+    window.removeEventListener('mouseup', onUp);
+    ov.remove();
+  }
   document.addEventListener('keydown', onKey);
   draw();
   document.body.appendChild(ov);
 }
+
 
 /* ── 자료 ── */
 let memoEdit=null, memoImgs=[], memoDraft=null, memoOpen=true, memoAdd=null;
@@ -1895,16 +1966,18 @@ function vPlan(){
       <div class="col" style="flex:2;min-width:330px">
         <div class="card" style="margin:0">
           <h2 style="font-size:14px">항목별 소계</h2>
-          <table class="ws"><thead><tr><th class="nw" style="width:150px">항목</th>
-            <th class="n" style="width:78px">지출예정</th><th class="n" style="width:78px">지출금</th>
-            <th class="n" style="width:86px">미납금</th></tr></thead><tbody>
+          <table class="wp"><thead><tr><th class="nw" style="width:150px">항목</th>
+            <th class="n" style="width:88px">예산</th><th class="n" style="width:78px">지출</th>
+            <th class="n" style="width:78px">지출예정</th><th class="n" style="width:86px">추가</th></tr></thead><tbody>
           ${S.expenseItems.map(it=>{
-            const v=planSum(it.name), sp=spentOf(it.name), left=(+it.budget||0)-sp-v;
+            const bd=+it.budget||0, v=planSum(it.name), sp=spentOf(it.name), left=bd-sp-v;
             return `<tr><td class="nw">${esc(it.name)}</td>
-              <td class="n ${v?'out':''}">${v?won(v):'-'}</td>
+              <td class="n">${bd?won(bd):'-'}</td>
               <td class="n ${sp?'out':''}">${sp?won(sp):'-'}</td>
+              <td class="n ${v?'out':''}">${v?won(v):'-'}</td>
               <td class="n ${left!==0?'out':''}">${won(left)}</td></tr>`}).join('')}
-          <tr class="sub"><td>계</td><td class="n">${won(total)}</td><td class="n">${won(spentAll())}</td>
+          <tr class="sub"><td>계</td><td class="n">${won(budg)}</td>
+            <td class="n">${won(spentAll())}</td><td class="n">${won(total)}</td>
             <td class="n ${budg-spentAll()-total!==0?'out':''}">${won(budg-spentAll()-total)}</td></tr>
           </tbody></table>
           <p class="swipe">← 표를 옆으로 밀어 보세요 →</p>
@@ -2278,15 +2351,15 @@ function vSettle(){
   return `
   <div class="card">
     <div class="phead" style="margin-bottom:16px">
-      <div class="ph-c">${esc(S.meta.church||'')}</div>
-      <div class="ph-t">${S.meta.year}년 ${esc(S.meta.dept)} 결산 보고서</div>
+      <div class="ph-c">${authRole==='home'?'':esc(S.meta.church||'')}</div>
+      <div class="ph-t">${authRole==='home'?esc(S.meta.dept)+' 결산 보고서':S.meta.year+'년 '+esc(S.meta.dept)+' 결산 보고서'}</div>
       <div class="ph-s">${authRole==='home'?'':`회계기간 ${PERIOD(S.meta.year)} · 12월은 가결산`}</div>
     </div>
     ${pBar()}
     <div class="row two">
       <div class="col">
         <h2 style="font-size:14px">수입 결산</h2>
-        <table class="we"><thead><tr><th style="width:110px">항목</th><th class="n">예산</th><th class="n">수입</th><th class="n">증감</th></tr></thead><tbody>
+        <table class="we"><thead><tr><th style="width:110px">항목</th><th class="n">예산</th><th class="n">수입</th><th class="n">${authRole==='home'?'잔고':'증감'}</th></tr></thead><tbody>
         ${s.inc.map((x,i)=>`<tr><td>${esc(x.name)}${i===carryIdx()?` <span class="hint" style="display:inline">(${authRole==='home'?'전년 이월':S.meta.year-1+'년 12월 정산 잔고'})</span>`:''}</td>
           <td class="n">${won(x.budget)}</td><td class="n">${won(x.actual)}</td>
           <td class="n ${x.actual-x.budget<0?'out':''}">${won(x.actual-x.budget)}</td></tr>`).join('')}
@@ -2295,7 +2368,7 @@ function vSettle(){
       </div>
       <div class="col">
         <h2 style="font-size:14px">지출 결산</h2>
-        <table class="we"><thead><tr><th style="width:110px">항목</th><th class="n">예산</th><th class="n">지출</th><th class="n">증감</th></tr></thead><tbody>
+        <table class="we"><thead><tr><th style="width:110px">항목</th><th class="n">예산</th><th class="n">지출</th><th class="n">${authRole==='home'?'잔고':'증감'}</th></tr></thead><tbody>
         ${s.exp.map(x=>`<tr><td>${esc(x.name)}</td><td class="n">${won(x.budget)}</td><td class="n">${won(x.actual)}</td>
           <td class="n ${x.actual-x.budget>0?'out':''}">${won(x.actual-x.budget)}</td></tr>`).join('')}
         <tr class="tot"><td>소계</td><td class="n">${won(s.expB)}</td><td class="n">${won(s.expT)}</td><td class="n">${won(s.expT-s.expB)}</td></tr>
