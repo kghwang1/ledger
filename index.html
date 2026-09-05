@@ -210,27 +210,37 @@ ol.steps small{color:var(--mute);display:block}
 .vinfo .kv{border-bottom:1px dashed #bfd9ce;padding:4px 0}
 .vtitle{font-weight:700;color:#26493f;margin-bottom:6px;font-size:14px}
 .vrow input{width:auto;flex:none}
-.imgov{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:99;display:flex;
-  align-items:center;justify-content:center;flex-direction:column;gap:14px;padding:20px;cursor:zoom-out}
-.imgov img{max-width:100%;max-height:78vh;border-radius:8px;background:#fff}
+.imgov{position:fixed;inset:0;background:#000;z-index:99;display:flex;
+  align-items:stretch;justify-content:flex-start;flex-direction:column;gap:0;padding:0;cursor:default}
+.imgov img{max-width:100%;max-height:100%;background:#fff}
 .imgov .cls{color:#fff;font-size:14px;font-weight:600}
-.imgov .ovbar{display:flex;align-items:center;gap:14px;width:100%;max-width:820px;justify-content:space-between}
-.imgov .ovn{color:#fff;font-size:14px;font-weight:600}
-.imgov .ovx{background:rgba(255,255,255,.2);color:#fff;border:0;border-radius:7px;padding:7px 16px;
-  font-size:14px;font-weight:600;cursor:pointer;font-family:inherit}
-.imgov .ovmain{display:flex;align-items:center;gap:10px;width:100%;max-width:820px;justify-content:center}
-.imgov .ovp,.imgov .ovnx{background:rgba(255,255,255,.18);color:#fff;border:0;border-radius:50%;
-  width:44px;height:44px;font-size:26px;line-height:1;cursor:pointer;flex:none}
-.imgov .ovwrap{flex:1;min-width:0;overflow:hidden;display:flex;align-items:center;justify-content:center;
-  max-height:72vh;touch-action:none}
+.imgov .ovbar{display:flex;align-items:center;gap:10px;width:100%;justify-content:space-between;
+  padding:8px 10px;background:rgba(0,0,0,.6);flex:none}
+.imgov .ovn{color:#fff;font-size:14px;font-weight:600;flex:none}
+.imgov .ovx{background:rgba(255,255,255,.2);color:#fff;border:0;border-radius:7px;padding:7px 14px;
+  font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;flex:none}
+.imgov .ovmain{display:flex;align-items:center;gap:0;width:100%;flex:1;min-height:0;
+  justify-content:center;position:relative}
+.imgov .ovp,.imgov .ovnx{background:rgba(255,255,255,.16);color:#fff;border:0;border-radius:50%;
+  width:44px;height:44px;font-size:26px;line-height:1;cursor:pointer;flex:none;
+  position:absolute;top:50%;margin-top:-22px;z-index:2}
+.imgov .ovp{left:6px} .imgov .ovnx{right:6px}
+.imgov .ovwrap{width:100%;height:100%;overflow:hidden;display:flex;align-items:center;
+  justify-content:center;touch-action:none}
 .imgov .ovwrap img{transition:transform .12s;transform-origin:center center;
   user-select:none;-webkit-user-drag:none}
 .imgov .ovz{display:flex;align-items:center;gap:6px}
 .imgov .ovz button{background:rgba(255,255,255,.2);color:#fff;border:0;border-radius:7px;padding:6px 11px;
   font-size:14px;font-weight:600;cursor:pointer;font-family:inherit}
 .imgov .ovpc{color:#fff;font-size:12.5px;min-width:44px;text-align:center}
-.imgov .ovtip{color:#cfd6d3;font-size:12px;text-align:center;max-width:820px}
-@media(max-width:560px){ .imgov .ovz button{padding:6px 9px;font-size:13px} .imgov .ovbar{gap:8px} }
+.imgov .ovtip{color:#cfd6d3;font-size:12px;text-align:center;padding:6px 10px;
+  background:rgba(0,0,0,.6);flex:none}
+@media(max-width:560px){
+  .imgov .ovz button{padding:6px 8px;font-size:13px}
+  .imgov .ovbar{gap:6px;padding:6px 8px}
+  .imgov .ovn{font-size:13px}
+  .imgov .ovtip{font-size:11px;padding:5px 8px}
+}
 .thumbs{display:flex;gap:5px;align-items:center;flex-wrap:wrap}
 .thumbs .cnt{font-size:11.5px;color:var(--mute)}
 .thumb{width:26px;height:26px;object-fit:cover;border-radius:4px;border:1px solid var(--line);cursor:pointer;vertical-align:middle}
@@ -680,7 +690,7 @@ function setStatus(t){ const el=document.getElementById('hSt'); if(el) el.textCo
 window.addEventListener('beforeunload', e=>{ if(dirty){ e.preventDefault(); e.returnValue='' } });
 
 /* ───────── 서버(공유) 저장 ───────── */
-const APPVER = '2026.95';
+const APPVER = '2026.96';
 const LIBKEY = 'church_ledger_lib_v1';
 const DATASHEET = '_data', DATATAG = 'CHURCH_LEDGER_V1';
 const XLSXMIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
