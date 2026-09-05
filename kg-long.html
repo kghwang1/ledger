@@ -1,0 +1,1157 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>장기투자 · KG리서치보드</title>
+<style>
+:root{
+  --bg:#0f1115; --panel:#171a21; --panel2:#1d212a; --line:#2a2f3a;
+  --tx:#e6e9ef; --tx2:#9aa3b2; --tx3:#6b7385;
+  --ok:#28a06a; --warn:#d9a221; --bad:#c8453f; --acc:#5b8def;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--tx);
+  font:13px/1.5 -apple-system,BlinkMacSystemFont,"Malgun Gothic","맑은 고딕",sans-serif}
+button,input,select,textarea{font:inherit}
+/* 위 줄: [종목] 버튼 + 포트폴리오 (분석 페이지와 같은 형식) */
+.lgtop{display:flex;align-items:center;gap:8px;padding:6px 10px;
+  background:var(--panel);border-bottom:1px solid var(--line)}
+.lgtop select{background:var(--panel2);border:1px solid var(--line);color:var(--tx);
+  border-radius:6px;padding:5px 10px;font-size:12.5px;min-width:150px}
+.lgbtn{padding:4px 12px;border-radius:6px;border:1px solid #6e7681;
+  background:#8b949e;color:#0d1117;font-size:12px;font-weight:700;cursor:pointer;flex:none}
+.lgbtn.on{background:#f2c800;border-color:#f2c800}
+.wrap{display:flex;height:calc(100vh - 40px);overflow:hidden}
+.side .hsearch{width:100%;box-sizing:border-box}
+/* 우측 머리 2줄 */
+.hd1,.hd2{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.hd1{margin-bottom:3px}
+.hd1 .lb,.hd2 .lb{color:var(--tx3);font-size:11.5px;flex:none}
+.hd1 .nm{font-size:16px;font-weight:800;letter-spacing:-.2px;color:#f2c800}
+.hd1 .c{color:#8b949e;font-size:12px;font-weight:700}
+.hd2{margin-bottom:10px}
+.hd2 .q{margin-left:auto;color:var(--tx3);font-size:11px}
+
+/* ---- 사이드 ---- */
+.side{width:150px;min-width:80px;flex:0 0 150px;border-right:1px solid var(--line);
+  background:var(--panel);display:flex;flex-direction:column;min-height:0}
+.sbox{padding:5px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:5px}
+.sbox .r{display:flex;gap:5px}
+.sbox input,.sbox select{flex:1;min-width:0;background:var(--panel2);border:1px solid var(--line);
+  color:var(--tx);border-radius:4px;padding:5px 7px}
+.sbox button{background:var(--acc);border:0;color:#fff;border-radius:4px;padding:5px 10px;cursor:pointer}
+.srcnote{color:var(--tx3);font-size:11px}
+.list{flex:1;overflow:auto;min-height:0}
+/* 좌우 경계 — 끌어서 폭 조절 */
+.rsz{flex:none;width:7px;cursor:col-resize;background:var(--panel);
+  border-right:1px solid var(--line);position:relative;touch-action:none;user-select:none}
+.rsz::before{content:'';position:absolute;left:2px;top:50%;transform:translateY(-50%);
+  width:3px;height:44px;border-radius:2px;background:#4a525e}
+.rsz:hover::before,.rsz.on::before{background:var(--acc)}
+.item{display:flex;align-items:center;gap:6px;padding:6px 8px;border-bottom:1px solid var(--line);
+  cursor:pointer;font-size:12px;color:var(--tx2)}
+.item:hover{background:var(--panel2)}
+.item.on{background:#d4af00;color:#0c0e14;font-weight:700}
+.item.on .cd{color:#0c0e14aa}
+.item .nm{flex:1;min-width:0;overflow:hidden}
+.item .nm b{font-weight:600;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.item .cd{color:var(--tx3);font-size:10px}
+.item .sc{font-weight:700;font-size:12px;min-width:24px;text-align:right}
+.item .x{color:var(--tx3);padding:0 3px}
+.item .x:hover{color:var(--bad)}
+.sidefoot{padding:7px;border-top:1px solid var(--line);display:flex;gap:5px}
+.sidefoot button{flex:1;background:var(--panel2);border:1px solid var(--line);color:var(--tx2);
+  border-radius:4px;padding:5px 0;cursor:pointer;font-size:11px}
+.sidefoot button:hover{color:var(--tx);border-color:#3a4150}
+
+/* ---- 본문 ---- */
+.main{flex:1;overflow:auto;padding:10px 12px 24px;min-width:0}
+.hd{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.hd .t{font-size:19px;font-weight:700}
+.hd .c{color:var(--tx3)}
+.hd .q{margin-left:auto;color:var(--tx3);font-size:11px}
+.hsearch{background:var(--panel2);border:1px solid var(--line);color:var(--tx);
+  border-radius:5px;padding:4px 7px;font-size:11px;width:180px;max-width:42vw}
+.hsearch::placeholder{color:var(--tx3)}
+#hqAc{position:fixed;z-index:99999;display:none;background:var(--panel);
+  border:1px solid var(--line);border-radius:8px;max-height:260px;overflow-y:auto;
+  box-shadow:0 8px 24px rgba(0,0,0,.6)}
+#hqAc .it{padding:9px 11px;cursor:pointer;font-size:12.5px;border-bottom:1px solid #21252e}
+#hqAc .it:hover{background:var(--panel2)}
+.hd2 .en{color:#8fb6ff;font-size:13px;letter-spacing:.2px}
+.hd2 .en.none{color:var(--tx3);font-style:italic}
+.enbtn{background:var(--panel2);border:1px solid var(--line);color:var(--tx2);
+  border-radius:4px;padding:2px 8px;font-size:11px;cursor:pointer}
+.enbtn:hover{color:var(--tx);border-color:#3a4150}
+.verdict{display:flex;align-items:center;gap:14px;background:var(--panel);
+  border:1px solid var(--line);border-radius:8px;padding:14px 16px;margin:10px 0 14px}
+.verdict .big{font-size:38px;font-weight:800;line-height:1;letter-spacing:-1px}
+.verdict .big small{font-size:14px;color:var(--tx3);font-weight:600}
+.verdict .lab{font-size:16px;font-weight:700}
+.verdict .sub{color:var(--tx2);font-size:12px;margin-top:3px}
+.flags{margin:0 0 14px;padding:10px 12px;border-radius:6px;background:#2a1c1c;border:1px solid #4a2a28;color:#f0b3af}
+.flags b{color:#ff8b84}
+.flags ul{margin:5px 0 0;padding-left:18px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.card h3{margin:0;padding:9px 12px;font-size:12px;border-bottom:1px solid var(--line);
+  display:flex;justify-content:space-between;align-items:center;color:var(--tx2);font-weight:600}
+.card h3 em{font-style:normal;color:var(--tx);font-weight:700}
+.rows{padding:4px 0}
+.row{display:flex;align-items:center;gap:8px;padding:6px 12px}
+.row .k{flex:1;color:var(--tx2)}
+.row .v{font-variant-numeric:tabular-nums;font-weight:600}
+/* 배점(얻은점수/만점) — 글자가 작고 흐려 잘 안 보인다는 지적이 있어
+   크기를 11px → 12.1px (10%) 로 키우고 색을 var(--tx3) 에서 한 단계 밝은 var(--tx2) 로 올렸다.
+   왼쪽 카드들과 미래 전망 카드가 이 한 규칙을 함께 쓴다. */
+.row .p{width:46px;text-align:right;font-size:12.1px;color:var(--tx2);font-variant-numeric:tabular-nums}
+.note{width:100%;color:var(--tx3);font-size:11px;padding:0 12px 6px;margin-top:-4px}
+.manual{padding:8px 12px 12px}
+.mrow{display:flex;align-items:center;gap:8px;margin-bottom:7px}
+.mrow label{flex:1;color:var(--tx2)}
+.mrow select{background:var(--panel2);border:1px solid var(--line);color:var(--tx);border-radius:4px;padding:4px 6px;min-width:130px}
+.hint{color:var(--tx3);font-size:11px;padding:0 12px 10px;line-height:1.6}
+.pill{display:inline-block;padding:1px 7px;border-radius:99px;font-size:11px;font-weight:600}
+table.fin{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+table.fin th,table.fin td{padding:5px 8px;border-bottom:1px solid #21252e;text-align:right;white-space:nowrap}
+table.fin th:first-child,table.fin td:first-child{text-align:left;color:var(--tx2)}
+table.fin thead th{color:var(--tx3);font-weight:600;font-size:11px}
+/* 분기 재무 표에 덧붙인 증권사 전망 칸 — 실적과 눈으로 구분되게 색을 달리한다 */
+table.fin th.fcc,table.fin td.fcc{background:#2b2411;color:#f2c800}
+table.fin th.fc1,table.fin td.fc1{border-left:2px solid #7a6a1f}
+.scroll{overflow-x:auto}
+.msg{padding:30px 10px;color:var(--tx3);text-align:center;line-height:1.8}
+.dbg{margin-top:14px}
+.dbg pre{background:#0b0d11;border:1px solid var(--line);border-radius:6px;padding:10px;overflow:auto;max-height:280px;color:var(--tx2);font-size:11px}
+.dbg summary{cursor:pointer;color:var(--tx3)}
+
+/* ---- 명부 등록 ---- */
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;z-index:50;padding:20px;overflow:auto}
+.modal.on{display:block}
+.mbox{max-width:720px;margin:0 auto;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px}
+.mbox h3{margin:0 0 6px;font-size:15px}
+.mbox p{margin:0 0 12px;color:var(--tx2);font-size:12px;line-height:1.7}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.two label{display:block;color:var(--tx2);font-size:12px;margin-bottom:4px}
+.two textarea{width:100%;height:190px;background:var(--panel2);border:1px solid var(--line);
+  color:var(--tx);border-radius:6px;padding:8px;font:12px/1.5 ui-monospace,Consolas,monospace;resize:vertical}
+.mfoot{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
+.mfoot button{border:1px solid var(--line);background:var(--panel2);color:var(--tx2);border-radius:5px;padding:7px 14px;cursor:pointer}
+.mfoot button.pri{background:var(--acc);border-color:var(--acc);color:#fff}
+@media(max-width:640px){
+  .side{width:120px;flex:0 0 120px}     /* 좁아도 좌우 2단을 유지한다 */
+  .two{grid-template-columns:1fr}
+  .main{padding:8px 10px 24px}
+}
+</style>
+</head>
+<body>
+<div class="lgtop">
+  <button id="sideToggle" class="lgbtn">종목</button>
+  <select id="src">
+        <option value="kr">한국(체)</option>
+        <option value="invest">코스피200</option>
+        <option value="investkq">코스닥100</option>
+        <option value="invpf">관심보유</option>
+        <option value="long">장기보유</option>
+        <option value="usc">미국(체)</option>
+        <option value="us">미국(반)</option>
+        <option value="etf">한·미 ETF</option>
+        <option value="dividend">배당</option>
+        <option value="_funds">펀드 명부(참고)</option>
+  </select>
+</div>
+<div class="wrap">
+  <aside class="side" id="side">
+    <div class="sbox">
+      <input id="hq" class="hsearch" placeholder="종목 검색 · 코드" autocomplete="off">
+      <div class="srcnote" id="srcnote"></div>
+    </div>
+    <div class="list" id="list"></div>
+    <div class="sidefoot">
+      <button id="fundBtn">펀드 명부</button>
+      <button id="reload">↻ 다시 계산</button>
+    </div>
+  </aside>
+  <div class="rsz" id="rsz" title="드래그해서 폭 조절"></div>
+  <main class="main" id="main"></main>
+</div>
+
+<!-- 펀드 명부 등록 -->
+<div class="modal" id="fundModal">
+  <div class="mbox">
+    <h3>펀드 명부 등록</h3>
+    <p>NBIM 등 장기펀드의 보유 명부를 <b>직전 스냅샷</b>과 <b>최신 스냅샷</b> 두 개로 넣으면,
+       종목별 지분율을 비교해 <b>늘린 종목</b>만 추려냅니다.
+       한 줄에 6자리 종목코드와 지분율이 함께 있으면 형식은 자유입니다 —
+       예: <code>005930 삼성전자 1.88</code> 또는 <code>005930,1.88</code>.
+       NBIM 은 6/30·12/31 기준으로 연 2회만 공개되므로, 갱신도 연 2회면 충분합니다.</p>
+    <div class="two">
+      <div><label>직전 스냅샷 (예: 2025-12-31)</label><textarea id="fPrev" placeholder="005930 삼성전자 1.94"></textarea></div>
+      <div><label>최신 스냅샷 (예: 2026-06-30)</label><textarea id="fCur" placeholder="005930 삼성전자 1.88"></textarea></div>
+    </div>
+    <div class="mfoot">
+      <button id="fClear">명부 지우기</button>
+      <button id="fCancel">닫기</button>
+      <button id="fSave" class="pri">명부 만들기</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ===== KG 장기투자 v2 =====
+   자동 85점(사업의질 40·재무안전 30·밸류 15) + 장기자금 15
+   자료: worker ?fin3=  ·  포트 목록: 부모창 chartPortRows()
+*/
+const WORKER='https://quote.kghwang1.workers.dev/';
+const USFIN ='https://kg-usfin.kghwang1.workers.dev/';
+const K_ROWS='kg_long_rows', K_FUND='kg_long_funds', K_EN='kg_long_en', K_SCORE='kg_long_scores';
+const BUILD='KG_LONG 2026-08-28 채점설명';
+console.log(BUILD);
+
+/* NBIM 검색용 영문 사명 — 없으면 화면에서 직접 넣어 저장할 수 있다 */
+const EN_NAME={
+"005930":"Samsung Electronics","000660":"SK Hynix","373220":"LG Energy Solution",
+"207940":"Samsung Biologics","005380":"Hyundai Motor","000270":"Kia",
+"068270":"Celltrion","005490":"POSCO Holdings","035420":"NAVER","035720":"Kakao",
+"051910":"LG Chem","006400":"Samsung SDI","028260":"Samsung C&T","012330":"Hyundai Mobis",
+"105560":"KB Financial Group","055550":"Shinhan Financial Group","086790":"Hana Financial Group",
+"316140":"Woori Financial Group","138040":"Meritz Financial Group","032830":"Samsung Life Insurance",
+"000810":"Samsung Fire & Marine Insurance","001450":"Hyundai Marine & Fire Insurance",
+"005830":"DB Insurance","088350":"Hanwha Life Insurance","071050":"Korea Investment Holdings",
+"006800":"Mirae Asset Securities","039490":"Kiwoom Securities","016360":"Samsung Securities",
+"015760":"Korea Electric Power","036460":"Korea Gas","017670":"SK Telecom","030200":"KT",
+"032640":"LG Uplus","009150":"Samsung Electro-Mechanics","011070":"LG Innotek",
+"018260":"Samsung SDS","034730":"SK Inc","096770":"SK Innovation","011790":"SKC",
+"285130":"SK Chemicals","018670":"SK Gas","010950":"S-Oil","011170":"Lotte Chemical",
+"011780":"Kumho Petrochemical","009830":"Hanwha Solutions","000880":"Hanwha",
+"012450":"Hanwha Aerospace","272210":"Hanwha Systems","042660":"Hanwha Ocean",
+"047810":"Korea Aerospace Industries","064350":"Hyundai Rotem","079550":"LIG Nex1",
+"010140":"Samsung Heavy Industries","009540":"HD Korea Shipbuilding & Offshore Engineering",
+"329180":"HD Hyundai Heavy Industries","267250":"HD Hyundai","267260":"HD Hyundai Electric",
+"011200":"HMM","003490":"Korean Air","086280":"Hyundai Glovis","004020":"Hyundai Steel",
+"010130":"Korea Zinc","103140":"Poongsan","006260":"LS Corp","010120":"LS Electric",
+"298040":"Hyosung Heavy Industries","298000":"Hyosung TNC","298050":"Hyosung Advanced Materials",
+"112610":"CS Wind","000720":"Hyundai Engineering & Construction","028050":"Samsung E&A",
+"047040":"Daewoo Engineering & Construction","375500":"DL E&C","006360":"GS Engineering & Construction",
+"078930":"GS Holdings","007070":"GS Retail","139480":"Emart","004170":"Shinsegae",
+"282330":"BGF Retail","027410":"BGF","069960":"Hyundai Department Store",
+"001040":"CJ Corp","097950":"CJ CheilJedang","035760":"CJ ENM","051500":"CJ Freshway",
+"004990":"Lotte Corp","005300":"Lotte Chilsung Beverage","280360":"Lotte Wellfood",
+"032350":"Lotte Tour Development","271560":"Orion","033780":"KT&G","003230":"Samyang Foods",
+"004370":"Nongshim","001680":"Daesang","007310":"Ottogi","026960":"Dongsuh",
+"051900":"LG H&H","090430":"Amorepacific","161890":"Kolmar Korea","192820":"Cosmax",
+"383220":"F&F","081660":"Fila Holdings","120110":"Kolon Industries",
+"161390":"Hankook Tire & Technology","204320":"HL Mando","018880":"Hanon Systems",
+"011210":"Hyundai Wia","241560":"Doosan Bobcat","000150":"Doosan","034020":"Doosan Enerbility",
+"002380":"KCC","344820":"KCC Glass","014830":"Unid","010060":"OCI Holdings","456040":"OCI",
+"014680":"Hansol Chemical","093370":"Foosung","357780":"Soulbrain","178920":"PI Advanced Materials",
+"247540":"Ecopro BM","086520":"Ecopro","066970":"L&F","000990":"DB HiTek",
+"042700":"Hanmi Semiconductor","240810":"Wonik IPS","403870":"HPSP","058470":"Leeno Industrial",
+"039030":"EO Technics","222800":"Simmtech","178320":"Seojin System","095340":"ISC",
+"007660":"ISU Petasys","098460":"Koh Young Technology","272290":"Innox Advanced Materials",
+"095610":"TES","319660":"PSK","005290":"Dongjin Semichem","108320":"LX Semicon",
+"348210":"Nextin","140860":"Park Systems","214150":"Classys","039200":"Oscotec",
+"237690":"ST Pharm","128940":"Hanmi Pharm","000100":"Yuhan","069620":"Daewoong Pharmaceutical",
+"185750":"Chong Kun Dang","302440":"SK Bioscience","196170":"Alteogen","145020":"Hugel",
+"259960":"Krafton","251270":"Netmarble","036570":"NCSoft","078340":"Com2uS",
+"263750":"Pearl Abyss","293490":"Kakao Games","095660":"Neowiz","352820":"HYBE",
+"041510":"SM Entertainment","122870":"YG Entertainment","035900":"JYP Entertainment",
+"012750":"S-1","069260":"Huchems","091700":"Partron","353200":"Daeduck Electronics"
+};
+let enCustom = jload0(K_EN,{});
+function jload0(k,d){ try{ const v=localStorage.getItem(k); return v?JSON.parse(v):d }catch(e){ return d } }
+function enOf(code){ return (enCustom[code]||EN_NAME[code]||'') }
+function setEn(code,v){
+  v=(v||'').trim();
+  if(v) enCustom[code]=v; else delete enCustom[code];
+  try{ localStorage.setItem(K_EN,JSON.stringify(enCustom)) }catch(e){}
+}
+
+let saved = jload(K_ROWS,[]);        // [{code,name,manual}]
+let funds = jload(K_FUND,{});        // {code:{name,prev,cur,dif}}
+const cache = {};                    // code -> {name,fin,raw,score,error,loading}
+let src='kr', cur=null;
+const QS=new URLSearchParams(location.search);
+const Q_PORT=QS.get('port')||'';
+const Q_CODE=(function(){
+  const raw=String(QS.get('code')||'').trim();
+  const d=raw.replace(/[^0-9]/g,'');
+  if(d.length===6) return d;                 // 국내 6자리
+  return /[A-Za-z]/.test(raw) ? raw : '';    // 해외 티커 (US: 접두사 포함 가능)
+})();
+// 부모창(종목분석)에 고른 종목을 알려 세 화면이 같은 종목을 보게 한다
+function tellParent(code,name){
+  try{ if(window.parent&&window.parent!==window)
+    window.parent.postMessage({kg:'stk', port:src.startsWith('_')?'':src, code:code||'', name:name||''}, '*'); }catch(e){}
+}
+
+function jload(k,d){ try{ const v=localStorage.getItem(k); return v?JSON.parse(v):d }catch(e){ return d } }
+function jsave(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)) }catch(e){} }
+// 장기 후보는 장기목록에만 담는다 (관심·보유는 건드리지 않는다)
+function saveRows(){ jsave(K_ROWS, saved); notifyParent(); }
+function notifyParent(){
+  try{ if(window.parent&&window.parent!==window)
+    window.parent.postMessage({kg:'sync', what:'long'}, '*'); }catch(e){}
+}
+// 채점 결과를 저장해 두면 포트의 [선정주 → 장기종목] 표에 점수가 뜬다
+function saveScore(code){
+  const c=cache[code]; if(!c||!c.score) return;
+  const m=jload(K_SCORE,{});
+  m[code]={ total:c.score.total, flags:c.score.flags.length>0,
+            thin:(c.score.max!=null && c.score.max<SCORE_MIN_BASE),
+            loss:!!c.score.isLoss,
+            name:bestName(code)||c.name||'', at:Date.now() };
+  const row=saved.find(x=>x.code===code);
+  if(row && !row.name){ row.name=bestName(code)||''; jsave(K_ROWS, saved); }
+  jsave(K_SCORE,m); notifyParent();
+}
+function dropScore(code){ const m=jload(K_SCORE,{}); delete m[code]; jsave(K_SCORE,m); notifyParent(); }
+function manualOf(code){
+  const s=saved.find(r=>r.code===code);
+  if(s) return s.manual;
+  const f=funds[code];
+  // null = 미확인(채점에서 제외) · 명부에서 온 종목만 1회 증가로 시작
+  return { nbim: f&&f.dif>0?1:null, active:null, nps:null };
+}
+function setManual(code,m){
+  let s=saved.find(r=>r.code===code);
+  if(!s){ s={code,name:(cache[code]&&cache[code].name)||'',manual:m}; saved.push(s) }
+  else s.manual=m;
+  saveRows();
+}
+
+/* ---------- 목록 출처 ---------- */
+function parentRows(port){
+  try{
+    if(window.parent && window.parent!==window && typeof window.parent.chartPortRows==='function')
+      return window.parent.chartPortRows(port)||[];
+  }catch(e){}
+  // 부모창에 못 닿을 때(파일 단독 실행) localStorage 로 대체
+  const map={invpf:['kg_watch_rows','kg_invpf_rows'], watch:['kg_watch_rows']};
+  if(map[port]){
+    const out=[],seen=new Set();
+    map[port].forEach(k=>{ const a=jload(k,[]); if(Array.isArray(a)) a.forEach(r=>{
+      const c=String((Array.isArray(r)?r[0]:r&&r.code)||'').trim(); if(!c||seen.has(c))return;
+      seen.add(c); out.push([c,(Array.isArray(r)?r[1]:r&&r.name)||'']); }); });
+    return out;
+  }
+  return [];
+}
+function srcRows(){
+  if(src==='_saved'||src==='long') return saved.map(r=>[r.code, r.name||(cache[r.code]&&cache[r.code].name)||'']);
+  if(src==='_funds') return Object.keys(funds).filter(c=>funds[c].dif>0)
+      .sort((a,b)=>funds[b].dif-funds[a].dif).map(c=>[c,funds[c].name||'']);
+  return parentRows(src);
+}
+/* 국내 6자리 코드와 해외 티커를 모두 받는다 (해외는 kg-usfin worker 로 조회) */
+const isUsCode = c => !/^\d{6}$/.test(String(c||'').replace(/^US:/i,'')) && /[A-Za-z]/.test(String(c||''));
+const usTickerOf = c => String(c||'').replace(/^US:/i,'').trim().toUpperCase();
+function domesticOnly(rows){
+  const out=[],skip=[];
+  rows.forEach(r=>{
+    const c=String(r[0]||'').trim();
+    if(/^\d{6}$/.test(c)) out.push([c, r[1]||'']);
+    else if(isUsCode(c)) out.push([c, r[1]||'']);
+    else if(c) skip.push(c);
+  });
+  return {out, skipped:skip.length};
+}
+
+/* ---------- 재무 ---------- */
+/* worker 의 ?fin3= 응답은 index.html 과 같은 평평한 구조다
+   {ok, periods, roe, debt, pbr, per, profit, opm, npm, quick, salesGrowth} */
+const FIELDS={
+  roe:['roe','ROE','자기자본이익률'],
+  debt:['debt','부채비율','debtRatio'],
+  quick:['quick','당좌비율','quickRatio'],
+  opm:['opm','영업이익률','opMargin','operatingMargin'],
+  npm:['npm','순이익률','netMargin'],
+  per:['per','PER'], pbr:['pbr','PBR'],
+  profit:['profit','순이익','당기순이익'],
+  roa:['roa','ROA','총자산이익률'],
+  ebitda:['ebitda','EBITDA'],
+  salesGrowth:['salesGrowth','매출증가율'],
+  sales:['sales','매출액','매출','revenue'], op:['op','영업이익','operatingProfit'],
+  period:['periods','period','기간','date','yymm','분기','label']
+};
+function num(v){
+  if(v===null||v===undefined||v==='') return null;
+  if(typeof v==='number') return isFinite(v)?v:null;
+  const s=String(v).replace(/[,%\s]/g,'').replace(/[^\d.\-]/g,'');
+  if(s===''||s==='-') return null;
+  const n=parseFloat(s); return isFinite(n)?n:null;
+}
+function findArray(o,d){
+  if(d>5||!o||typeof o!=='object') return null;
+  if(Array.isArray(o)){
+    if(o.length>=2&&o.length<=16&&o[0]&&typeof o[0]==='object'){
+      const ks=Object.keys(o[0]).join('|');
+      if(/ROE|roe|부채|PER|per|매출|sales/.test(ks)) return o;
+    }
+    for(const it of o){ const f=findArray(it,d+1); if(f) return f }
+    return null;
+  }
+  for(const k in o){ const f=findArray(o[k],d+1); if(f) return f }
+  return null;
+}
+function normalize(raw){
+  // 1) 알려진 평평한 구조 먼저
+  const flat0=(raw&&raw.data&&typeof raw.data==='object')?raw.data:raw;
+  if(flat0&&typeof flat0==='object'&&(Array.isArray(flat0.roe)||Array.isArray(flat0.per))){
+    const o={}; let n=0;
+    for(const f in FIELDS){
+      let ser=null;
+      for(const nm of FIELDS[f]) if(Array.isArray(flat0[nm])){
+        ser = (f==='period') ? flat0[nm].map(v=>String(v??'')) : flat0[nm].map(num);
+        break;
+      }
+      o[f]=ser; if(ser) n=Math.max(n,ser.length);
+    }
+    o._n=n; return o;
+  }
+  // 2) 객체 배열 구조
+  const arr=findArray(raw,0), out={};
+  if(arr){
+    for(const f in FIELDS){
+      const key=FIELDS[f].find(n=>arr.some(r=>r&&r[n]!==undefined));
+      out[f]=key?arr.map(r=>f==='period'?String(r[key]??''):num(r[key])):null;
+    }
+    out._n=arr.length; return out;
+  }
+  const flat=(raw&&raw.data&&typeof raw.data==='object')?raw.data:raw; let n=0;
+  for(const f in FIELDS){
+    let s=null;
+    if(flat&&typeof flat==='object') for(const nm of FIELDS[f]) if(Array.isArray(flat[nm])){ s=flat[nm].map(num); break }
+    out[f]=s; if(s) n=Math.max(n,s.length);
+  }
+  out._n=n; return out;
+}
+// 영업이익률이 없으면 영업이익÷매출액 으로 만들어 쓴다
+function fillDerived(f){
+  if((!f.opm||!f.opm.some(v=>v!=null)) && f.op && f.sales){
+    f.opm = f.op.map((v,i)=>{ const s=f.sales[i]; return (v==null||s==null||!s)?null:v/s*100 });
+  }
+  return f;
+}
+// 부모창이 이미 받아둔 FIN3 캐시가 있으면 그대로 쓴다 (호출 절약)
+function parentFin3(code){
+  try{
+    const F=window.parent&&window.parent!==window?window.parent.FIN3:null;
+    if(F&&F[code]&&(F[code].roe||F[code].per)) return F[code];
+  }catch(e){}
+  return null;
+}
+const tail=(a,k)=>a?a.filter(v=>v!==null&&v!==undefined).slice(-k):[];
+const avg=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:null;
+const last=a=>{ const t=tail(a,1); return t.length?t[0]:null };
+const fmt=(v,u)=>v===null||v===undefined?'—':(Math.round(v*100)/100)+(u||'');
+
+/* ---------- 채점 ---------- */
+function band(v,st){
+  if(v===null||v===undefined) return{p:0,why:'자료없음',avail:false};
+  for(const[t,p,l]of st) if(v>=t) return{p,why:l,avail:true};
+  return{p:0,why:'미달',avail:true};
+}
+function bandLow(v,st){
+  if(v===null||v===undefined) return{p:0,why:'자료없음',avail:false};
+  for(const[t,p,l]of st) if(v<=t) return{p,why:l,avail:true};
+  return{p:0,why:'미달',avail:true};
+}
+// 자료가 없는 항목은 만점에서 빼고 100점으로 환산한다
+function tally(items){
+  let got=0, max=0, miss=0;
+  items.forEach(it=>{ if(it.o.avail){ got+=it.o.p; max+=it.max } else miss++ });
+  return {got,max,miss};
+}
+
+function score(fin,m){
+  /* 수익성 지표: ROE 가 있으면 ROE, 없으면 ROA 를 쓴다.
+     ROE = 순이익÷자기자본(주주 기준), ROA = 순이익÷총자산(레버리지 제외).
+     해외(네이버)는 ROE 를 주지 않으므로 ROA 로 대체하고 기준선을 낮춘다. */
+  const hasRoe = fin.roe && fin.roe.some(v=>v!=null);
+  const useRoa = !hasRoe && fin.roa && fin.roa.some(v=>v!=null);
+  const profKey = hasRoe ? 'roe' : (useRoa ? 'roa' : 'roe');
+  const profLabel = useRoa ? 'ROA' : 'ROE';
+  const roe6=tail(fin[profKey],6), profAvg=avg(roe6);
+  let cv=null;
+  if(roe6.length>=3&&profAvg&&Math.abs(profAvg)>0.01){
+    const v=roe6.reduce((s,x)=>s+(x-profAvg)**2,0)/roe6.length; cv=Math.sqrt(v)/Math.abs(profAvg);
+  }
+  const lossQ=roe6.filter(v=>v<0).length;
+  const opm=tail(fin.opm,6); let trend=null;
+  if(opm.length>=4){ const h=Math.ceil(opm.length/2); trend=avg(opm.slice(-h))-avg(opm.slice(0,opm.length-h)) }
+  const opmAvg=avg(opm);
+  const debt=last(fin.debt), quick=last(fin.quick), per=last(fin.per), pbr=last(fin.pbr);
+
+  const A1= useRoa
+          ? band(profAvg,[[8,12,'우수'],[5,10,'양호'],[3,6,'보통'],[1.5,3,'낮음']])   // ROA 는 기준선이 낮다
+          : band(profAvg,[[15,12,'우수'],[10,10,'양호'],[7,6,'보통'],[4,3,'낮음']]);
+  const A2= lossQ>0 ? {p:0,why:'적자 '+lossQ+'회',avail:true}
+          : cv===null ? {p:0,why:'자료부족',avail:false}
+          : bandLow(cv,[[0.15,12,'매우 안정'],[0.30,9,'안정'],[0.50,5,'변동 큼']]);
+  // 영업이익률 수준 — 20% 이상 만점 (업종 차이가 크므로 동종업계와 함께 보세요)
+  const A4= band(opmAvg,[[20,10,'매우 높음'],[15,8,'높음'],[10,6,'양호'],[5,3,'보통']]);
+  const A3= trend===null?{p:0,why:'자료부족',avail:false}
+          : band(trend,[[1,6,'개선'],[0,4,'유지'],[-1,2,'소폭 악화']]);
+  const hasBs = (debt!=null) || (quick!=null);        // 재무상태표 자료가 오는가
+  const B1=bandLow(debt,[[50,15,'매우 낮음'],[100,12,'낮음'],[150,8,'보통'],[200,4,'높음']]);
+  const B2=band(quick,[[150,15,'풍부'],[100,12,'양호'],[70,8,'보통'],[50,4,'빠듯']]);
+
+  /* 부채·당좌가 없으면(해외) 이익의 질로 대체한다
+     Q1 순이익÷EBIT : 본업으로 번 것이 순이익으로 남는 비율.
+                      1 을 크게 넘으면 본업 밖 이익(일회성)이 섞였다는 신호라 감점.
+     Q2 EBIT÷EBITDA : 감가상각을 빼고도 남는 비율. 설비 부담이 클수록 낮다. */
+  const opN=tail(fin.op,6), pfN=tail(fin.profit,6), edN=tail(fin.ebitda,6);
+  const ratio=(a,b)=>{
+    if(!a.length||!b.length) return null;
+    const n=Math.min(a.length,b.length);
+    const va=a.slice(-n), vb=b.slice(-n);
+    const pairs=va.map((v,i)=>(v!=null&&vb[i]!=null&&vb[i]>0)?v/vb[i]:null).filter(v=>v!=null);
+    return pairs.length?avg(pairs):null;
+  };
+  const q1=ratio(pfN,opN), q2=ratio(opN,edN);
+  const Q1 = q1===null ? {p:0,why:'자료부족',avail:false}
+           : q1>1.3   ? {p:2, why:'순이익이 EBIT 보다 큼 — 본업 밖 이익 의심',avail:true}
+           : q1>1.1   ? {p:8, why:'순이익이 EBIT 을 웃돎',avail:true}
+           : q1>=0.6  ? {p:15,why:'이익이 본업에서 나옴',avail:true}
+           : q1>=0.4  ? {p:10,why:'이자·세금 부담이 큰 편',avail:true}
+           : q1>0     ? {p:5, why:'순이익 전환율 낮음',avail:true}
+           :            {p:0, why:'적자',avail:true};
+  const Q2 = q2===null ? {p:0,why:'자료부족',avail:false}
+           : band(q2,[[0.7,15,'감가상각 부담 적음'],[0.5,11,'보통'],[0.3,6,'설비 부담 큼']]);
+  /* PER 은 순이익이 0 근처면 산술적으로만 커진다. 그런 구간은 "비싸다"가 아니라
+     "잴 수 없다"이므로 avail:false 로 두어 만점에서 빼고 100점 환산한다.
+     적자(per<=0)도 같다. 예전에는 avail:true 여서 만점 8점이 분모에 남아
+     측정 불가를 최하점으로 세는 셈이었다. 기준 200 배는 본 앱의 다른 검사와 같은 값이다. */
+  const PER_ABSURD = 200;
+  const C1= per===null ? {p:0,why:'자료없음',avail:false}
+          : per<=0     ? {p:0,why:'적자 — PER 로는 잴 수 없음',avail:false}
+          : per>PER_ABSURD ? {p:0,why:'이익이 바닥이라 PER 이 의미 없음('+Math.round(per)+'배)',avail:false}
+          : bandLow(per,[[10,8,'저평가'],[15,6,'적정'],[25,4,'다소 비쌈'],[40,2,'비쌈']]);
+  const C2=bandLow(pbr,[[1,7,'저평가'],[1.5,5,'적정'],[2.5,3,'다소 비쌈'],[4,1,'비쌈']]);
+
+  const A=[{k:profLabel+' 평균',v:fmt(profAvg,'%'),o:A1,max:12},
+           {k:profLabel+' 안정성',v:cv===null?'—':'CV '+cv.toFixed(2),o:A2,max:12},
+           {k:'영업이익률 수준',v:fmt(opmAvg,'%'),o:A4,max:10},
+           {k:'영업이익률 추세',v:trend===null?'—':(trend>0?'+':'')+trend.toFixed(1)+'%p',o:A3,max:6}];
+  const B = hasBs
+    ? [{k:'부채비율',v:fmt(debt,'%'),o:B1,max:15},{k:'당좌비율',v:fmt(quick,'%'),o:B2,max:15}]
+    : [{k:'이익의 질 (순이익÷EBIT)',v:q1===null?'—':q1.toFixed(2),o:Q1,max:15},
+       {k:'EBIT ÷ EBITDA',       v:q2===null?'—':q2.toFixed(2),o:Q2,max:15}];
+  const C=[{k:'PER',v:fmt(per,'배'),o:C1,max:8},{k:'PBR',v:fmt(pbr,'배'),o:C2,max:7}];
+
+  // 장기자금 — 미확인(null)은 채점에서 제외
+  const dOne=(val,tbl,max)=> val===null||val===undefined
+      ? {o:{p:0,why:'미확인',avail:false},max}
+      : {o:{p:tbl,why:'',avail:true},max};
+  const D=[ dOne(m.nbim, [0,2,4,6][Math.min(3,m.nbim|0)], 6),
+            dOne(m.active, m.active==='act'?6:m.active==='pas'?2:0, 6),
+            dOne(m.nps, m.nps?3:0, 3) ];
+
+  const tA=tally(A), tB=tally(B), tC=tally(C), tD=tally(D);
+  const got=tA.got+tB.got+tC.got+tD.got, max=tA.max+tB.max+tC.max+tD.max;
+  const total = max>0 ? Math.round(got/max*100) : 0;
+  const missing = tA.miss+tB.miss+tC.miss+tD.miss;
+
+  const flags=[];
+  if(debt!==null&&debt>200) flags.push('부채비율 '+debt.toFixed(0)+'% — 장기 보유 중 금리·업황 충격에 취약합니다.');
+  if(lossQ>=2) flags.push('최근 6기 중 적자 '+lossQ+'회 — 이익이 아직 구조화되지 않았습니다.');
+  if(q1!==null && q1>1.5) flags.push('순이익이 EBIT 의 '+q1.toFixed(1)+'배 — 본업 밖 이익이 섞여 있을 수 있습니다.');
+  if(opmAvg!==null && opmAvg>60) flags.push('영업이익률 '+opmAvg.toFixed(0)+'% — 자료가 정상인지 확인이 필요합니다.');
+  if(quick!==null&&quick<50) flags.push('당좌비율 '+quick.toFixed(0)+'% — 단기 유동성이 빠듯합니다.');
+  if(cv!==null&&cv>0.6) flags.push(profLabel+' 변동계수 '+cv.toFixed(2)+' — 실적이 사이클에 크게 흔들립니다.');
+
+  /* 적자 기업 판별 — 자료가 없는 것과 구분해서 알린다.
+     순이익·영업이익·수익성 지표 중 최근 값이 음수면 적자로 본다. */
+  const lastN = a => { const v=(a||[]).filter(x=>x!=null); return v.length? v[v.length-1] : null; };
+  const pfLast = lastN(fin.profit), opLast = lastN(fin.op), prLast = lastN(fin[profKey]);
+  const isLoss = (pfLast!=null && pfLast<0) || (prLast!=null && prLast<0) ||
+                 (pfLast==null && opLast!=null && opLast<0);
+  const lossHow = [];
+  if(pfLast!=null && pfLast<0) lossHow.push('순이익 적자');
+  if(opLast!=null && opLast<0) lossHow.push('영업 적자');
+  if(prLast!=null && prLast<0) lossHow.push(profLabel+' 마이너스');
+
+  return {total, got, max, missing, flags, isLoss, lossHow, tA,tB,tC,tD,
+          bsLabel: hasBs ? '재무 안전성' : '이익의 질 (재무 자료 없음)',
+          profLabel, detail:{A,B,C}};
+}
+/* 채점 가능한 만점이 절반(85점 중 45점) 아래면 점수를 신뢰할 수 없다.
+   적자 성장주는 PER 이 없고 ROE·부채비율도 안 오는 경우가 많아,
+   남은 항목만으로 환산하면 점수가 부풀려진다. */
+const SCORE_MIN_BASE = 45;
+/* ───── 증권사 전망 (보고서 화면에서 입력한 값) ─────
+   실적이 아니라 전망이므로 본래 점수에는 넣지 않고 작게 따로 보여준다. */
+function fcstCard(code){
+  const ev=fcstEval(fcstOf(code));
+  if(!ev || ev.total==null) return '';
+  const rows=ev.parts.map(p=>
+    `<div class="row"><div class="k">${p.n}${p.v!=null?` <span class="sub">${p.v.toFixed(1)}${p.u||''}</span>`:''}</div>`
+   + `<div class="v" style="font-size:13px">${esc(p.txt)}</div>`
+   + `<div class="p">${p.p}/${p.max}</div></div>`).join('');
+  return `<div class="card" style="background:#3d0d0d;border-color:#7a1f1f">
+    <div class="sechd">
+      <span>미래 전망 <span style="font-size:10.5px;color:var(--tx3);font-weight:400">보고서 기초 · ${esc(ev.years)}</span></span>
+      <span style="font-size:13px;color:#f2c800">${ev.total}<span style="font-size:10px;color:var(--tx3)">/100</span></span>
+    </div>
+    ${rows}
+    <div class="hint" style="padding:6px 2px 0">본래 점수에는 넣지 않은 <b>참고 지표</b>입니다.
+      증권사 전망은 낙관 쪽으로 기우는 경향이 있으니, 실적이 나올 때마다 맞았는지 확인해 보세요.</div>
+  </div>`;
+}
+function fcstOf(code){
+  try{ const o=JSON.parse(localStorage.getItem('kg_fcst')||'{}');
+    const a=o[String(code||'')]; return Array.isArray(a)?a:[]; }catch(e){ return []; }
+}
+const fnum=v=>{ const n=parseFloat(String(v==null?'':v).replace(/[^0-9.\-]/g,'')); return isFinite(n)?n:null; };
+function fcstEval(rows){
+  const R=(rows||[]).slice().sort((a,b)=>String(a.year).localeCompare(String(b.year)));
+  if(!R.length) return null;
+  const avg=k=>{ const v=R.map(r=>fnum(r[k])).filter(x=>x!=null); return v.length? v.reduce((a,b)=>a+b,0)/v.length : null; };
+  const last=k=>{ const v=R.map(r=>fnum(r[k])).filter(x=>x!=null); return v.length? v[v.length-1] : null; };
+  const bd=(v,st)=>{ if(v==null) return null; for(const [t,p] of st) if(v>=t) return p; return 0; };
+  const g=avg('sales'), o=avg('opm'), e=avg('roe'), pe=last('per'), pb=last('pbr');
+  const parts=[];
+  if(g!=null) parts.push({n:'성장',   v:g, u:'%', p:bd(g,[[15,25],[10,20],[5,13],[0,6]]), max:25,
+    txt:g>=15?'높은 성장 전망':g>=10?'견조한 성장':g>=5?'완만한 성장':g>=0?'정체':'역성장 전망'});
+  if(o!=null) parts.push({n:'수익성', v:o, u:'%', p:bd(o,[[20,25],[15,20],[10,13],[5,6]]), max:25,
+    txt:o>=20?'매우 높음':o>=15?'높음':o>=10?'양호':o>=5?'보통':'낮음'});
+  if(e!=null) parts.push({n:'자본효율', v:e, u:'%', p:bd(e,[[15,25],[10,20],[7,13],[4,6]]), max:25,
+    txt:e>=15?'우수':e>=10?'양호':e>=7?'보통':'낮음'});
+  if(pe!=null||pb!=null){
+    let sc=0, mx=0;
+    if(pe!=null){ mx+=13; sc+= pe<=10?13: pe<=15?10: pe<=25?6: pe<=40?3:0; }
+    if(pb!=null){ mx+=12; sc+= pb<=1?12: pb<=1.5?9: pb<=2.5?6: pb<=4?3:0; }
+    const v=Math.round(sc/mx*25);
+    parts.push({n:'밸류에이션', v:null, p:v, max:25, txt:v>=18?'저평가 구간':v>=12?'적정':'비싼 편'});
+  }
+  const got=parts.reduce((a,b)=>a+b.p,0), max=parts.reduce((a,b)=>a+b.max,0);
+  return { total: max? Math.round(got/max*100):null, parts,
+           years: R.map(r=>r.year).filter(Boolean).join(' · ') };
+}
+
+function verdictOf(t,flags,maxBase,isLoss,lossHow){
+  if(isLoss)
+    return ['적자 기업','var(--bad)',
+      (lossHow&&lossHow.length ? lossHow.join(' · ')+'. ' : '')
+      + '이익이 나기 전이라 수익성·밸류에이션 지표로는 판단할 수 없습니다. 매출 성장과 적자 축소 속도를 직접 보세요.'];
+  if(maxBase!=null && maxBase < SCORE_MIN_BASE)
+    return ['자료 부족','var(--tx3)','채점 가능한 항목이 적어 점수를 신뢰하기 어렵습니다. 공시 항목이 빠진 종목입니다.'];
+  if(flags.length) return ['보류','var(--bad)','결격 항목을 먼저 확인하세요.'];
+  if(t>=80) return ['장기보유 후보','var(--ok)','6개월 이상 들고 갈 근거가 있습니다.'];
+  if(t>=65) return ['관찰','var(--warn)','한두 분기 더 지켜보세요.'];
+  return ['제외','var(--tx3)','장기 보유 근거가 약합니다.'];
+}
+
+/* ---------- 조회 ---------- */
+async function loadOne(code,name){
+  let c=cache[code];
+  if(c&&(c.loading||c.fin)) return c;
+  c=cache[code]={loading:true,name:name||savedName(code)||''};
+  renderList(); if(cur===code) renderMain();
+  try{
+    let raw=parentFin3(code);
+    if(!raw){
+      const u = isUsCode(code)
+        ? USFIN+'?usfin='+encodeURIComponent(usTickerOf(code))+'&freq=annual'   // 해외
+        : WORKER+'?fin3='+encodeURIComponent(code);                            // 국내
+      const r=await fetch(u);
+      if(!r.ok) throw new Error('worker '+r.status);
+      raw=await r.json();
+      if(raw && raw.ok===false) throw new Error(raw.error||'자료 없음');
+    }
+    c.raw=raw;
+    c.name=(raw&&(raw.name||raw.종목명||raw.stockName))||name||c.name||savedName(code)||code;
+    c.fin=fillDerived(normalize(raw));
+    if(!c.fin.roe&&!c.fin.debt&&!c.fin.per) throw new Error('재무 항목을 못 찾음');
+    c.score=score(c.fin,manualOf(code));
+    saveScore(code);
+  }catch(e){ c.error=e.message }
+  c.loading=false;
+  const s=saved.find(r=>r.code===code); if(s&&!s.name&&c.name){ s.name=c.name; saveRows() }
+  renderList(); if(cur===code) renderMain();
+  return c;
+}
+function rescore(code){
+  const c=cache[code]; if(c&&c.fin){ c.score=score(c.fin,manualOf(code)); saveScore(code); }
+}
+
+/* ---------- 그리기 ---------- */
+const esc=s=>String(s).replace(/[<>&"]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+function renderList(){
+  const box=document.getElementById('list'), note=document.getElementById('srcnote');
+  const qEl=document.getElementById('hq');
+  const q=((qEl&&qEl.value)||'').trim().toLowerCase();
+  const {out,skipped}=domesticOnly(srcRows());
+  note.textContent = out.length
+    ? out.length+'개 종목'+(skipped?' · 해외 '+skipped+'개 제외(국내 분기재무만 지원)':'')
+    : (src==='_saved'?'후보를 추가하세요'
+      :src==='_funds'?'펀드 명부가 비어 있습니다'
+      :'먼저 그 탭을 한 번 열어 자료를 불러오세요');
+  const rows=out.filter(r=>!q||r[0].includes(q)||(r[1]||'').toLowerCase().includes(q));
+  if(!rows.length){ box.innerHTML='<div class="msg">'+(q?'검색 결과 없음':'목록이 비어 있습니다')+'</div>'; return }
+  box.innerHTML=rows.map(([code,name])=>{
+    const c=cache[code], s=c&&c.score;
+    const col=!s?'var(--tx3)':s.flags.length?'var(--bad)':s.total>=80?'var(--ok)':s.total>=65?'var(--warn)':'var(--tx3)';
+    const f=funds[code];
+    const sub=(src==='_funds'&&f)? f.prev.toFixed(2)+'% → '+f.cur.toFixed(2)+'%' : code;
+    return `<div class="item ${cur===code?'on':''}" data-code="${esc(code)}" data-name="${esc(name)}">
+      <span class="nm"><b>${esc(name||code)}</b><span class="cd">${esc(sub)}</span></span>
+      <span class="sc" style="color:${col}">${c&&c.loading?'…':s?s.total:''}</span>
+      ${src==='_saved'?`<span class="x" data-del="${esc(code)}">✕</span>`:''}</div>`;
+  }).join('');
+}
+// 담아둔 장기 후보를 한눈에 (선정주의 [장기종목] 과 같은 목록)
+function renderLongList(done){
+  const m=document.getElementById('main');
+  if(!saved.length){
+    done('<div class="msg">담아둔 장기종목이 없습니다.<br>종목을 채점한 뒤 <b>＋ 후보 담기</b>로 담으세요.'
+      +'<br>왼쪽 목록에서 종목을 고르면 채점 화면으로 돌아갑니다.</div>');
+    return;
+  }
+  const line=r=>{
+    const c=cache[r.code], s=c&&c.score;
+    const thin = s && s.max!=null && s.max < SCORE_MIN_BASE;
+    const loss = s && s.isLoss;
+    const col=!s?'var(--tx3)':loss?'var(--bad)':thin?'var(--tx3)':s.flags.length?'var(--bad)':s.total>=80?'var(--ok)':s.total>=65?'var(--warn)':'var(--tx3)';
+    const en=enOf(r.code);
+    /* 보고서 화면에서 넣은 증권사 전망 점수를 괄호로 함께 보여준다.
+       실적 점수와 성격이 달라 색과 크기를 달리 한다. */
+    const fe=fcstEval(fcstOf(r.code));
+    const fv=(fe && fe.total!=null) ? fe.total : null;
+    const fcol = fv==null ? 'var(--tx3)' : fv>=80?'var(--ok)':fv>=65?'var(--warn)':'var(--tx3)';
+    return `<tr data-code="${esc(r.code)}" style="cursor:pointer">
+      <td style="text-align:left"><b>${esc(bestName(r.code)||r.code)}</b>
+        <span style="color:var(--tx3);font-size:11px"> ${esc(r.code)}</span>
+        ${en?`<div style="color:#8fb6ff;font-size:11px">${esc(en)}</div>`:''}</td>
+      <td style="color:${col};font-weight:700">${s?s.total:'…'}`
+       + (fv!=null ? ` <span style="color:${fcol};font-weight:600;font-size:12px" title="증권사 전망 점수 (보고서 기초)">(${fv})</span>` : '')
+       + `</td>
+      <td style="color:var(--tx2)">${s?(loss?'적자':thin?'자료부족':s.flags.length?'보류':s.total>=80?'후보':s.total>=65?'관찰':'제외'):''}</td>
+      <td style="color:var(--tx2)">${s?s.tD.max?s.tD.got+'/'+s.tD.max:'미확인':''}</td>
+    </tr>`;
+  };
+  done(`
+  <div class="card" style="margin-top:10px"><div class="scroll">
+    <table class="fin"><thead><tr><th>종목</th><th>점수<span style="font-weight:400;color:var(--tx3);font-size:10.5px"> (미래전망)</span></th><th>판정</th><th>장기자금</th></tr></thead>
+    <tbody>${saved.map(line).join('')}</tbody></table></div></div>
+  <div class="hint" style="padding:10px 2px">줄을 누르면 그 종목의 채점 화면으로 갑니다.
+    이 목록은 포트의 <b>선정주 → 장기종목</b> 에도 그대로 나옵니다.<br>
+    괄호 안은 <b>미래 전망 점수</b>입니다 — 보고서 화면에서 넣은 증권사 전망으로 매긴 값이라
+    실적 점수와 성격이 다릅니다.</div>`);
+  m.querySelectorAll('tbody tr').forEach(tr=>{
+    tr.onclick=()=>{ showList=false; pick(tr.dataset.code, ''); };
+  });
+
+}
+
+let showList=false;
+
+/* 상단 바 — 종목명 · 검색창 · 장기종목 · 후보 담기 (화면 전체 폭) */
+function savedName(code){
+  const r=saved.find(x=>x.code===code);
+  if(r&&r.name) return r.name;
+  try{ const m=jload(K_SCORE,{}); if(m[code]&&m[code].name) return m[code].name; }catch(e){}
+  return '';
+}
+function bestName(code){
+  return (cache[code]&&cache[code].name && cache[code].name!==code ? cache[code].name : '')
+      || savedName(code) || listName(code) || '';
+}
+function listName(code){
+  const {out}=domesticOnly(srcRows());
+  const r=out.find(x=>x[0]===code); return r?r[1]:'';
+}
+/* 우측 머리 2줄
+   1줄: 종목이름 : 선택 종목명 · [＋후보 담기] · [종목 검색]
+   2줄: 종목이름 : 영문명 · [복사] · [장기종목] */
+function headHtml(){
+  const title = showList ? '장기종목' : (cur ? esc(bestName(cur)||cur) : '종목 미선택');
+  const inSaved = cur && saved.some(r=>r.code===cur);
+  const en = cur ? enOf(cur) : '';
+  /* 종목명은 부모(종목분석) 하부메뉴 줄에 표시되므로 여기서는 빼고,
+     영문명·복사와 담기/목록 단추만 한 줄로 둔다. */
+  return `<div class="hd2">
+    <span class="${en?'en':'en none'}" id="enTxt">${esc(en||'영문명 없음 — NBIM 검색용')}</span>
+    ${cur?'<button id="enEdit" class="enbtn">✎</button>':''}
+    ${en?'<button id="enCopy" class="enbtn">복사</button>':''}
+    ${cur&&!showList?`<button id="keepBtn" class="enbtn" style="${inSaved?'':'background:var(--acc);border-color:var(--acc);color:#fff'}">${inSaved?'후보에서 빼기':'＋ 후보 담기'}</button>`:''}
+    <button id="longListBtn" class="enbtn">${showList?'종목 채점':'장기종목'}</button>
+    ${showList?`<span class="c">${saved.length}종목</span>`:''}
+    <span class="q">${BUILD}</span>
+  </div>`;
+}
+function bindHead(){
+  bindHeadSearch();
+  const lb=document.getElementById('longListBtn');
+  if(lb) lb.onclick=()=>{ showList=!showList; renderMain(); };
+  const kb=document.getElementById('keepBtn');
+  if(kb) kb.onclick=()=>{
+    if(!cur) return;
+    const inSaved=saved.some(r=>r.code===cur);
+    if(inSaved){ saved=saved.filter(r=>r.code!==cur); dropScore(cur); }
+    else { saved.push({code:cur,name:bestName(cur)||'',manual:manualOf(cur)}); saveScore(cur); }
+    saveRows(); renderList(); renderMain();
+  };
+  const eb=document.getElementById('enEdit');
+  if(eb) eb.onclick=()=>{ const v=prompt('NBIM 검색에 쓸 영문 사명', enOf(cur)||''); if(v===null) return; setEn(cur,v); renderMain(); };
+  const ec=document.getElementById('enCopy');
+  if(ec) ec.onclick=async()=>{
+    const t=enOf(cur);
+    try{ await navigator.clipboard.writeText(t); ec.textContent='복사됨'; setTimeout(()=>ec.textContent='복사',1200); }
+    catch(e){ prompt('복사해서 NBIM 검색창에 붙여넣으세요', t); }
+  };
+}
+
+function renderMain(){
+  const m=document.getElementById('main');
+  const done = body => { m.innerHTML = headHtml() + body; bindHead(); };
+  if(showList){ renderLongList(done); return; }
+  if(!cur){ done('<div class="msg">위 검색칸에서 종목을 찾거나, 왼쪽 목록에서 고르세요.</div>'); return }
+  const c=cache[cur];
+  if(!c||c.loading){ done('<div class="msg">'+cur+' 재무 받는 중…</div>'); return }
+  if(c.error){
+    const nm=String(bestName(cur)||'');
+    const etfLike = /ETF|INDEX|TRUST|SPDR|ISHARES|INVESCO|VANECK|ROUNDHILL|PROSHARES|GLOBAL X|SELECT SECTOR|EQUAL WEIGHT/i.test(nm);
+    done('<div class="msg">'
+      + (etfLike
+          ? '<b>ETF·펀드는 재무 채점 대상이 아닙니다.</b><br>개별 기업이 아니라 여러 종목을 담은 상품이라 ROE·영업이익률 같은 지표가 없습니다.'
+          : '자료를 받지 못했습니다 — '+esc(c.error)
+            + '<br>티커 표기가 맞는지, 해외 재무 worker 가 배포됐는지 확인하세요.')
+      + '</div>');
+    return;
+  }
+  const s=c.score, [lab,col,sub]=verdictOf(s.total,s.flags,s.max,s.isLoss,s.lossHow), m0=manualOf(cur), f=funds[cur];
+  const sec=(t,tl,list)=>`<div class="card"><h3>${t}<em>${tl.got} / ${tl.max||0}</em></h3><div class="rows">
+    ${list.map(it=>`<div class="row"><span class="k">${it.k}</span><span class="v">${it.v}</span>
+      <span class="p">${it.o.avail?it.o.p+'/'+it.max:'제외'}</span></div>
+      <div class="note">${it.o.why}</div>`).join('')}
+    </div></div>`;
+  const fin=c.fin, n=(fin.period&&fin.period.length)||fin._n||0;
+  const cols=[]; for(let i=0;i<n;i++) cols.push(fin.period?(fin.period[i]||('Q'+(i+1))):('Q'+(i+1)));
+  /* 보고서에서 읽은 증권사 전망을 같은 표 오른쪽에 이어 붙인다.
+     실적이 아니라 전망이므로 칸 색을 달리하고 경계선을 하나 긋는다. */
+  const fcR=(typeof fcstOf==='function'?fcstOf(cur):[]).slice()
+    .sort((a,b)=>String(a.year||'').localeCompare(String(b.year||'')));
+  const fcHead=fcR.map((r,i)=>`<th class="fcc${i?'':' fc1'}">${esc(r.year||'')}</th>`).join('');
+  /* l=이름, k=실적 항목, u=단위, fk=전망 항목(없으면 전망 칸은 —) */
+  const fr=(l,k,u,fk)=>{
+    if(!fin[k] && !fcR.length) return '';
+    const q = fin[k] ? fin[k].map(v=>`<td>${fmt(v,u)}</td>`).join('')
+                     : cols.map(()=>'<td>—</td>').join('');
+    const f = fcR.map((r,i)=>{
+      /* 보고서에 적힌 그대로 보여 준다 — 숫자로 바꾸면 5.0 이 5 로 줄어든다 */
+      const t = fk ? String(r[fk]==null?'':r[fk]).trim() : '';
+      return `<td class="fcc${i?'':' fc1'}">${t===''?'—':esc(t)+(u||'')}</td>`;
+    }).join('');
+    return `<tr><td>${l}</td>${q}${f}</tr>`;
+  };
+
+  done(`
+  <div class="verdict">
+    <div class="big" style="color:${col}">${s.total}<small>/100</small></div>
+    <div><div class="lab" style="color:${col}">${lab}</div><div class="sub">${sub}
+      <br><span style="color:var(--tx3)">획득 ${s.got} / 가능 ${s.max}점 → 100점 환산${s.missing?' · 자료없는 '+s.missing+'개 항목 제외':''}</span></div></div>
+  </div>
+  ${s.flags.length?`<div class="flags"><b>결격 검토</b><ul>${s.flags.map(x=>'<li>'+x+'</li>').join('')}</ul></div>`:''}
+  <div class="grid">
+    ${sec('사업의 질',s.tA,s.detail.A)}
+    ${fcstCard(cur)}
+    ${sec(s.bsLabel||'재무 안전성',s.tB,s.detail.B)}
+    ${sec('밸류에이션',s.tC,s.detail.C)}
+    <div class="card"><h3>장기자금 <em>${s.tD.max?s.tD.got+' / '+s.tD.max:'미확인'}</em></h3>
+      ${f?`<div class="row"><span class="k">명부 지분율</span>
+        <span class="v">${f.prev.toFixed(2)}% → ${f.cur.toFixed(2)}%</span>
+        <span class="pill" style="background:${f.dif>0?'#1d4634':'#3a2020'};color:${f.dif>0?'#5fd39b':'#f0a09a'}">
+        ${f.dif>0?'+':''}${f.dif.toFixed(2)}%p</span></div>`:''}
+      <div class="manual">
+        <div class="mrow"><label>지분율 연속 증가</label>
+          <select id="m_nbim"><option value="">— 미확인 (채점 제외)</option>
+          <option value="0">없음 (0점)</option><option value="1">1회 (2점)</option>
+          <option value="2">2회 연속 (4점)</option><option value="3">3회 이상 (6점)</option></select></div>
+        <div class="mrow"><label>액티브 운용사 5% 공시</label>
+          <select id="m_act"><option value="_">— 미확인 (채점 제외)</option>
+          <option value="">없음 (0점)</option><option value="pas">단순투자 목적 (2점)</option>
+          <option value="act">일반투자·경영참여 (6점)</option></select></div>
+        <div class="mrow"><label>국민연금 5% 이상</label>
+          <select id="m_nps"><option value="_">— 미확인 (채점 제외)</option>
+          <option value="">아니오 (0점)</option><option value="1">예 (3점)</option></select></div>
+      </div>
+      <div class="hint">확인하지 않은 항목은 <b>미확인</b>으로 두세요 — 0점이 아니라 만점에서 아예 빠집니다.
+        NBIM 은 6/30·12/31 기준으로 연 2회만 공개됩니다. 한 번의 급증은 지수 리밸런싱일 수 있으니
+        <b>연속 증가</b>를 세세요. 액티브 여부는 DART 대량보유상황보고서의 <b>보유목적</b>으로 봅니다 —
+        단순투자는 대부분 인덱스, 일반투자·경영참여가 실제 판단입니다.</div>
+    </div>
+  </div>
+  <div class="card" style="margin-top:12px"><h3>분기 재무 <em>최근 ${n}분기${fcR.length?` + 전망 ${fcR.length}년`:''}</em></h3>
+    <div class="scroll"><table class="fin"><thead><tr><th>항목</th>${cols.map(x=>`<th>${esc(x)}</th>`).join('')}${fcHead}</tr></thead>
+    <tbody>${fr('매출증가율','salesGrowth','%','sales')}${fr('ROE','roe','%','roe')}${fr('영업이익률','opm','%','opm')}${fr('순이익률','npm','%')}
+    ${fr('부채비율','debt','%','debt')}${fr('당좌비율','quick','%')}${fr('PER','per','','per')}${fr('PBR','pbr','','pbr')}</tbody></table></div>
+    ${fcR.length?`<div class="hint" style="padding:7px 2px 0">
+      <b style="color:#f2c800">색이 다른 오른쪽 칸</b>은 실적이 아니라 <b>증권사 전망</b>입니다
+      ${fcR[0].broker?`— ${esc(fcR[0].broker)}${fcR[0].at?' ('+esc(fcR[0].at)+')':''}`:''}.
+      순이익률·당좌비율은 보고서에 없어 <b>—</b> 로 둡니다.
+      전망은 낙관 쪽으로 기우는 경향이 있으니, 분기 실적이 나올 때마다 왼쪽 칸과 견줘 보세요.</div>`:''}</div>
+  ${howHtml()}
+  <details class="dbg"><summary>원자료 보기</summary><pre>${esc(JSON.stringify(c.raw,null,1)).slice(0,20000)}</pre></details>`);
+
+  document.getElementById('m_nbim').value=(m0.nbim===null||m0.nbim===undefined)?'':String(m0.nbim);
+  document.getElementById('m_act').value=(m0.active===null||m0.active===undefined)?'_':m0.active;
+  document.getElementById('m_nps').value=(m0.nps===null||m0.nps===undefined)?'_':(m0.nps?'1':'');
+  ['m_nbim','m_act','m_nps'].forEach(id=>document.getElementById(id).onchange=()=>{
+    const nb=document.getElementById('m_nbim').value, ac=document.getElementById('m_act').value,
+          np=document.getElementById('m_nps').value;
+    setManual(cur,{ nbim: nb===''?null:+nb,
+                    active: ac==='_'?null:ac,
+                    nps: np==='_'?null:(np==='1') });
+    rescore(cur); renderList(); renderMain();
+  });
+}
+
+/* ───── 채점 방법 안내 (채점 화면 맨 아래) ─────
+   점수가 어떻게 나왔는지 화면에서 바로 확인할 수 있게 적어 둔다.
+   기준을 고치면 이 글도 함께 고쳐야 한다. */
+function howHtml(){
+  const t = (a,b,c) => `<tr><td style="text-align:left">${a}</td><td>${b}</td><td style="text-align:left;color:var(--tx2)">${c}</td></tr>`;
+  return `<details class="card" style="margin-top:12px">
+    <summary style="cursor:pointer;font-weight:700;color:var(--tx);padding:2px 0">
+      점수는 이렇게 매깁니다 <span style="font-weight:400;color:var(--tx3);font-size:11.5px">눌러서 펼치기</span></summary>
+
+    <div class="hint" style="padding:8px 2px 10px">
+      <b>85점 만점</b>을 네 묶음으로 나눠 매기고 100점으로 환산합니다.
+      자료가 없는 항목은 0점이 아니라 <b>만점에서 아예 뺍니다</b>.
+      그래서 화면 위에 <b>획득 ○ / 가능 ○점 → 100점 환산</b> 이라고 적혀 있습니다.
+      수익성·재무는 <b>최근 6분기</b>를 봅니다.
+    </div>
+
+    <div class="scroll"><table class="fin" style="font-size:12px">
+      <thead><tr><th style="text-align:left">항목</th><th>배점</th><th style="text-align:left">기준</th></tr></thead>
+      <tbody>
+      <tr><td colspan="3" style="text-align:left;color:var(--acc);font-weight:700;padding-top:6px">① 사업의 질 — 40점</td></tr>
+      ${t('ROE 평균','12','15%↑ 12 · 10%↑ 10 · 7%↑ 6 · 4%↑ 3')}
+      ${t('ROE 안정성','12','변동계수 0.15↓ 12 · 0.30↓ 9 · 0.50↓ 5 <b>· 적자가 한 번이라도 있으면 0</b>')}
+      ${t('영업이익률 수준','10','20%↑ 10 · 15%↑ 8 · 10%↑ 6 · 5%↑ 3')}
+      ${t('영업이익률 추세','6','앞 절반과 뒤 절반의 평균 비교 — 개선 6 · 유지 4 · 소폭악화 2')}
+
+      <tr><td colspan="3" style="text-align:left;color:var(--acc);font-weight:700;padding-top:6px">② 재무 안전성 — 30점</td></tr>
+      ${t('부채비율','15','50%↓ 15 · 100%↓ 12 · 150%↓ 8 · 200%↓ 4')}
+      ${t('당좌비율','15','150%↑ 15 · 100%↑ 12 · 70%↑ 8 · 50%↑ 4')}
+      <tr><td colspan="3" style="text-align:left;color:var(--tx3);font-size:11.5px">해외 종목은 이 둘이 공시되지 않아 <b>이익의 질</b>로 대신합니다 —
+        순이익÷EBIT (0.6~1.1 이면 15점, 1.3 초과면 본업 밖 이익으로 보아 2점) 과 EBIT÷EBITDA (0.7↑ 15점).</td></tr>
+
+      <tr><td colspan="3" style="text-align:left;color:var(--acc);font-weight:700;padding-top:6px">③ 밸류에이션 — 15점</td></tr>
+      ${t('PER','8','10배↓ 8 · 15배↓ 6 · 25배↓ 4 · 40배↓ 2 · 적자면 0')}
+      ${t('PBR','7','1배↓ 7 · 1.5배↓ 5 · 2.5배↓ 3 · 4배↓ 1')}
+
+      <tr><td colspan="3" style="text-align:left;color:var(--acc);font-weight:700;padding-top:6px">④ 장기자금 — 9점 <span style="font-weight:400;color:var(--tx3)">(손으로 고르는 항목)</span></td></tr>
+      ${t('NBIM 연속 증가','6','0회 0 · 1회 2 · 2회 4 · 3회↑ 6')}
+      ${t('액티브 운용사 5% 공시','6','액티브 6 · 패시브 2')}
+      ${t('국민연금 5% 이상','3','해당하면 3')}
+      </tbody></table></div>
+
+    <div class="hint" style="padding:10px 2px 0">
+      <b>경고 딱지</b>는 점수와 별개로 붙습니다 — 부채비율 200% 초과 · 최근 6기 중 적자 2회 이상 ·
+      순이익이 EBIT 의 1.5배 초과 · 영업이익률 60% 초과(자료 오류 의심) · 당좌비율 50% 미만 ·
+      ROE 변동계수 0.6 초과.
+    </div>
+    <div class="hint" style="padding:6px 2px 0">
+      <b>판정</b> — 80점↑ 후보 · 65점↑ 관찰 · 그 아래 제외.
+      적자면 <b>적자</b>, 경고가 있으면 <b>보류</b>, 채점 가능 만점이 45점 미만이면 <b>자료부족</b>으로 표시합니다.
+    </div>
+    <div class="hint" style="padding:6px 2px 0">
+      붉은 칸의 <b>미래 전망</b> 점수는 증권사 보고서로 매긴 값이라 <b>이 점수에 들어가지 않습니다</b>.
+      두 숫자의 간격이 곧 "얼마나 큰 변화를 기대하고 있는가" 입니다.
+    </div>
+  </details>`;
+}
+
+/* ---------- 우측 종목 검색 ---------- */
+function hqBox(){
+  let b=document.getElementById('hqAc');
+  if(!b){ b=document.createElement('div'); b.id='hqAc'; document.body.appendChild(b); }
+  return b;
+}
+function hqPlace(inp){
+  const b=hqBox(), r=inp.getBoundingClientRect();
+  b.style.left=Math.round(r.left)+'px';
+  b.style.width=Math.max(210,Math.round(r.width))+'px';
+  b.style.top=Math.round(r.bottom+4)+'px';
+  b.style.maxHeight=Math.min(260,Math.max(120,window.innerHeight-r.bottom-16))+'px';
+}
+function bindHeadSearch(){
+  const inp=document.getElementById('hq'); if(!inp||inp._b) return; inp._b=true;
+  const box=hqBox(); let timer=null;
+  const close=()=>{ box.style.display='none'; box.innerHTML=''; };
+  inp.oninput=()=>{
+    renderList();                       // 왼쪽 목록도 함께 걸러준다
+    const v=inp.value.trim();
+    clearTimeout(timer);
+    if(!v){ close(); return; }
+    timer=setTimeout(async()=>{
+      try{
+        const r=await fetch(WORKER+'?find='+encodeURIComponent(v));
+        const d=await r.json();
+        const items=((d&&d.items)||[]).filter(it=>it.code&&/^\d{6}$/.test(it.code)).slice(0,10);
+        if(!items.length){ close(); return; }
+        box.innerHTML=items.map(it=>
+          `<div class="it" data-code="${it.code}" data-name="${esc(it.name||'')}"><b>${esc(it.name||'')}</b> <span style="color:var(--tx3)">${it.code}</span></div>`).join('');
+        box.querySelectorAll('.it').forEach(el=>{
+          el.onmousedown=ev=>{ ev.preventDefault();
+            close(); inp.value=''; renderList();
+            showList=false; pick(el.dataset.code, el.dataset.name);   // 고르면 바로 채점
+          };
+        });
+        box.style.display='block'; hqPlace(inp);
+      }catch(e){ close(); }
+    },250);
+  };
+  inp.onkeydown=ev=>{
+    if(ev.key==='Enter'){
+      ev.preventDefault();
+      const v=String(inp.value||'').trim();
+      const c=v.replace(/[^0-9]/g,'');
+      if(c.length===6){ close(); inp.value=''; renderList(); showList=false; pick(c,''); }
+      else if(/^[A-Za-z.\-]{1,6}$/.test(v)){ close(); inp.value=''; renderList(); showList=false; pick(v.toUpperCase(),''); }
+    }else if(ev.key==='Escape'){ close(); }
+  };
+  inp.onblur=()=>setTimeout(close,150);
+  window.addEventListener('scroll',()=>{ if(box.style.display!=='none') hqPlace(inp); },true);
+  window.addEventListener('resize',()=>{ if(box.style.display!=='none') hqPlace(inp); });
+}
+
+/* ---------- 펀드 명부 ---------- */
+function parseSnap(txt){
+  const out={};
+  (txt||'').split(/\r?\n/).forEach(line=>{
+    const code=(line.match(/\b(\d{6})\b/)||[])[1]; if(!code) return;
+    const rest=line.replace(code,' ');
+    const nums=rest.match(/-?\d+(?:\.\d+)?/g)||[];
+    const rate=nums.length?parseFloat(nums[nums.length-1]):null;
+    const name=(rest.match(/[가-힣A-Za-z][가-힣A-Za-z0-9&\.\- ]{0,20}/)||[''])[0].trim();
+    if(rate===null||!isFinite(rate)) return;
+    out[code]={rate,name};
+  });
+  return out;
+}
+function buildFunds(){
+  const p=parseSnap(document.getElementById('fPrev').value);
+  const c=parseSnap(document.getElementById('fCur').value);
+  const f={};
+  Object.keys(c).forEach(code=>{
+    const prev=p[code]?p[code].rate:0, cur=c[code].rate;
+    f[code]={name:c[code].name||(p[code]&&p[code].name)||'',prev,cur,dif:cur-prev};
+  });
+  funds=f; jsave(K_FUND,funds);
+  const up=Object.values(f).filter(x=>x.dif>0).length;
+  document.getElementById('fundModal').classList.remove('on');
+  src='_funds'; document.getElementById('src').value='_funds'; cur=null;
+  renderList(); renderMain();
+  alert('명부 '+Object.keys(f).length+'종목 중 지분을 늘린 '+up+'종목을 추렸습니다.');
+}
+
+/* ---------- 이벤트 ---------- */
+function pick(code,name){
+  showList=false;                       // 목록 화면에 갇히지 않고 채점 화면으로
+  cur=code; renderList(); tellParent(code,name);
+  const c=cache[code];
+  if(c&&(c.fin||c.error)) renderMain(); else loadOne(code,name);
+}
+// 부모(종목분석) 안에서 열렸으면 자체 상단 줄을 숨긴다 — 부모 줄과 겹치지 않게
+const EMBEDDED = (()=>{ try{ return window.parent && window.parent!==window; }catch(e){ return false; } })();
+if(EMBEDDED){
+  const top=document.querySelector('.lgtop'); if(top) top.style.display='none';
+  const w=document.querySelector('.wrap'); if(w) w.style.height='100vh';
+}
+// 부모의 [종목] 버튼 신호를 받아 좌측을 접고 편다
+window.addEventListener('message', e=>{
+  const d=e.data;
+  if(!d || d.kg!=='side') return;
+  const sd=document.getElementById('side'), rz=document.getElementById('rsz');
+  if(!sd) return;
+  sd.style.display = d.on ? 'flex' : 'none';
+  if(rz) rz.style.display = d.on ? 'block' : 'none';
+});
+
+(function(){
+  const tg=document.getElementById('sideToggle'), sd=document.getElementById('side'), rz=document.getElementById('rsz');
+  if(!tg||!sd) return;
+  const paint=()=>{
+    const off = sd.style.display==='none';
+    if(rz) rz.style.display = off ? 'none' : 'block';
+    tg.classList.toggle('on', !off);
+  };
+  tg.onclick=()=>{ sd.style.display = (sd.style.display==='none') ? 'flex' : 'none'; paint(); };
+
+  // 저장해 둔 폭 적용
+  const W_KEY='kg_long_side_w';
+  const w=parseInt(localStorage.getItem(W_KEY)||'',10);
+  if(w>=80 && w<=560){ sd.style.width=w+'px'; sd.style.flexBasis=w+'px'; }
+
+  if(rz){
+    let dragging=false;
+    const move=x=>{
+      const left=sd.getBoundingClientRect().left;
+      const nw=Math.max(80, Math.min(560, Math.round(x-left)));
+      sd.style.width=nw+'px'; sd.style.flexBasis=nw+'px';
+    };
+    const stop=()=>{
+      if(!dragging) return;
+      dragging=false; rz.classList.remove('on'); document.body.style.userSelect='';
+      try{ localStorage.setItem(W_KEY, parseInt(sd.style.width,10)||222); }catch(e){}
+    };
+    rz.addEventListener('mousedown', e=>{ dragging=true; rz.classList.add('on'); document.body.style.userSelect='none'; e.preventDefault(); });
+    document.addEventListener('mousemove', e=>{ if(dragging) move(e.clientX); });
+    document.addEventListener('mouseup', stop);
+    rz.addEventListener('touchstart', e=>{ dragging=true; rz.classList.add('on'); if(e.touches[0]) move(e.touches[0].clientX); e.preventDefault(); }, {passive:false});
+    rz.addEventListener('touchmove', e=>{ if(dragging&&e.touches[0]){ move(e.touches[0].clientX); e.preventDefault(); } }, {passive:false});
+    rz.addEventListener('touchend', stop);
+    rz.addEventListener('touchcancel', stop);
+    rz.addEventListener('dblclick', ()=>{ sd.style.width='150px'; sd.style.flexBasis='150px';
+      try{ localStorage.setItem(W_KEY,'150'); }catch(e){} });
+  }
+  paint();
+})();
+document.getElementById('src').onchange=e=>{
+  src=e.target.value; cur=null;
+  if(!src.startsWith('_')) tellParent('','');   // 포트 변경을 부모(종목분석)에 알린다
+  renderList(); renderMain();
+};
+document.getElementById('list').onclick=e=>{
+  const d=e.target.dataset.del;
+  if(d){ saved=saved.filter(r=>r.code!==d); saveRows(); if(cur===d) cur=null; renderList(); renderMain(); return }
+  const it=e.target.closest('.item'); if(!it) return;
+  pick(it.dataset.code, it.dataset.name);
+};
+document.getElementById('reload').onclick=()=>{
+  const {out}=domesticOnly(srcRows());
+  out.forEach(([c,n])=>{ delete cache[c]; });
+  out.slice(0,40).forEach(([c,n])=>loadOne(c,n));
+  renderList();
+};
+document.getElementById('fundBtn').onclick=()=>document.getElementById('fundModal').classList.add('on');
+document.getElementById('fCancel').onclick=()=>document.getElementById('fundModal').classList.remove('on');
+document.getElementById('fSave').onclick=buildFunds;
+document.getElementById('fClear').onclick=()=>{
+  if(!confirm('펀드 명부를 지울까요?')) return;
+  funds={}; jsave(K_FUND,funds); renderList(); renderMain();
+};
+
+// 종목분석에서 넘겨준 포트·종목으로 시작
+if(Q_PORT){
+  const sel=document.getElementById('src');
+  if([...sel.options].some(o=>o.value===Q_PORT)){ src=Q_PORT; sel.value=Q_PORT; }
+}
+bindHeadSearch();
+renderList();
+if(Q_CODE){
+  const {out}=domesticOnly(srcRows());
+  const hit=out.find(r=>String(r[0]).toUpperCase()===Q_CODE.toUpperCase());
+  pick(hit?hit[0]:Q_CODE, hit?hit[1]:'');
+} else { renderMain(); }
+saved.slice(0,20).forEach(r=>loadOne(r.code,r.name));
+</script>
+</body>
+</html>
