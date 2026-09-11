@@ -694,7 +694,7 @@ function setStatus(t){ const el=document.getElementById('hSt'); if(el) el.textCo
 window.addEventListener('beforeunload', e=>{ if(dirty){ e.preventDefault(); e.returnValue='' } });
 
 /* ───────── 서버(공유) 저장 ───────── */
-const APPVER = '2026.98';
+const APPVER = '2026.100';
 const LIBKEY = 'church_ledger_lib_v1';
 const DATASHEET = '_data', DATATAG = 'CHURCH_LEDGER_V1';
 const XLSXMIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -1156,6 +1156,8 @@ function render(){
   document.querySelectorAll('#nav button[data-tab]').forEach(b=>b.onclick=()=>{
     const k=b.dataset.tab;
     if(k==='plan' && tab!=='plan'){ planEdit=null; planImg=''; planDraft=null; planOpen=true }
+    if(k!=='memo' && memoPending() &&
+       !confirm('자료 탭에 아직 [완료]를 누르지 않은 입력이 있습니다.\n다른 탭으로 가면 사라집니다. 계속할까요?')) return;
     if(k==='memo' && tab!=='memo'){ memoEdit=null; memoImgs=[]; memoDraft=null; memoOpen=true }
     if(k==='ledger' && tab!=='ledger'){                 // 출납부를 열면 오늘 날짜의 분기·달로
       const t=todayPeriod();
@@ -1174,6 +1176,7 @@ function render(){
   if(mt){
     const snapMemo=()=>{ memoDraft={text:mt.value, etc:$('#moEtc').value} };
     const addMemo=()=>{
+      if(moBusy){ alert('문서를 올리는 중입니다. 잠시 기다려 주세요.'); return }
       const t=mt.value.trim(), etc=$('#moEtc').value.trim();
       if(!t && !etc && !memoImgs.length){ alert('자료내용을 넣어 주세요.'); mt.focus(); return }
       if(memoEdit){ const i=(S.memos||[]).findIndex(x=>x.id===memoEdit);
@@ -1202,7 +1205,14 @@ function render(){
         const f = fl[i++];
         if(/pdf/i.test(f.type||'') || /\.pdf$/i.test(f.name||'')){
           moBusy = `${f.name} 올리는 중입니다…`; render();
-          uploadPdf(f, url=>{ if(url) memoImgs.push(url); next() });
+          uploadPdf(f, url=>{
+            if(url){
+              memoImgs.push(url);
+              if(memoDraft && !String(memoDraft.text||'').trim())      // 제목이 비었으면 파일 이름으로
+                memoDraft.text = String(f.name).replace(/\.pdf$/i,'');
+            }
+            next();
+          });
         } else {
           shrinkImage(f, url=>{ memoImgs.push(url); next() }, true);      // 글자가 읽히도록
         }
@@ -1274,7 +1284,10 @@ function render(){
     if(planEdit===e.target.dataset.prm) planEdit=null; save(); render() });
   on('[data-pimg]','click',e=>{ const t=(S.plan||[]).find(x=>x.id===e.target.dataset.pimg); if(t&&t.img) showImg(t.img) });
   const nsv = document.getElementById('navSave');
-  if(nsv) nsv.onclick = ()=>{ serverOn()? srvSave() : saveFile() };
+  if(nsv) nsv.onclick = ()=>{
+    if(memoPending() && !confirm('자료 탭에 아직 [완료]를 누르지 않은 입력이 있습니다.\n그대로 저장할까요?\n\n(자료를 남기려면 취소하고 [완료]를 먼저 누르세요.)')) return;
+    serverOn()? srvSave() : saveFile();
+  };
   const nex = document.getElementById('navExit');
   if(nex) nex.onclick = exitApp;
   const nlk = document.getElementById('navLock');
@@ -1886,6 +1899,11 @@ function showImgs(list, idx){
 let memoEdit=null, memoImgs=[], memoDraft=null, memoOpen=true, memoAdd=null, moBusy='';
 function todayISO(){ const d=new Date();
   return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0') }
+function memoPending(){                  // 아직 [완료]를 누르지 않은 입력이 있는가
+  if(tab!=='memo' || locked || ro) return false;
+  const t=$('#moText'), e=$('#moEtc');
+  return !!(memoImgs.length || (t&&t.value.trim()) || (e&&e.value.trim()));
+}
 function vMemo(){
   const list=(S.memos||[]).slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   const ed = memoEdit ? (S.memos||[]).find(e=>e.id===memoEdit) : null;
@@ -1913,7 +1931,7 @@ function vMemo(){
           <input type="file" id="moPicIn" accept="image/*,application/pdf" multiple style="display:none">
           <input type="file" id="moPicCamIn" accept="image/*" capture="environment" style="display:none">
         </span>
-        <button class="btn" id="moAdd">${ed?'수정':'완료'}</button>
+        <button class="btn" id="moAdd" ${moBusy?'disabled':''}>${moBusy?'올리는 중…':(ed?'수정':'완료')}</button>
         ${ed?`<button class="btn g" id="moCancel">취소</button>`:''}
       </div>
       ${moBusy?`<div class="fr"><span class="lg-busy">${esc(moBusy)}</span></div>`:''}
@@ -2606,10 +2624,10 @@ function vData(){
     <div class="kv"><span>저장될 파일 이름</span><b>${esc(fileName())}</b></div>
     <div class="kv"><span>자동 저장 (작업 중 임시 보관)</span><b>${mode}</b></div>
     <div class="kv" style="border:0"><span>현재 보관 중인 거래</span><b>${cnt}건</b></div>
-    <div class="tools no-ro" style="margin-top:12px">
+    <div class="tools" style="margin-top:12px">
       <button class="btn" id="fSave">파일로 저장</button>
       <button class="btn g" id="fShare">카톡으로 공유</button>
-      <button class="btn g" id="fOpen">파일 열기</button>
+      <span class="no-ro"><button class="btn g" id="fOpen">파일 열기</button></span>
     </div>
     <div class="note" style="margin-top:12px">
       결산 서류 제출이나 개인 백업용입니다. 파일은 <b>엑셀(.xlsx)</b>이라 그냥 열어 보실 수도 있고,
