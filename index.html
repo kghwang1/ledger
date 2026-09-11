@@ -216,8 +216,8 @@ ol.steps small{color:var(--mute);display:block}
 .imgov .cls{color:#fff;font-size:14px;font-weight:600}
 .imgov .ovbar{display:flex;align-items:center;gap:10px;width:100%;justify-content:space-between;
   padding:8px 10px;background:rgba(0,0,0,.6);flex:none}
-.imgov .ovn{color:#fff;font-size:14px;font-weight:600;flex:none}
-.imgov .ovx{background:rgba(255,255,255,.2);color:#fff;border:0;border-radius:7px;padding:7px 14px;
+.imgov .ovn{color:#fff;font-size:14px;font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.imgov .ovx,.imgov .ovopen{background:rgba(255,255,255,.2);color:#fff;border:0;border-radius:7px;padding:7px 14px;
   font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;flex:none}
 .imgov .ovmain{display:flex;align-items:center;gap:0;width:100%;flex:1;min-height:0;
   justify-content:center;position:relative}
@@ -229,6 +229,7 @@ ol.steps small{color:var(--mute);display:block}
   justify-content:center;touch-action:none}
 .imgov .ovwrap img{transition:transform .12s;transform-origin:center center;
   user-select:none;-webkit-user-drag:none}
+.imgov .ovpdf{width:100%;height:100%;border:0;background:#fff}
 .imgov .ovz{display:flex;align-items:center;gap:6px}
 .imgov .ovz button{background:rgba(255,255,255,.2);color:#fff;border:0;border-radius:7px;padding:6px 11px;
   font-size:14px;font-weight:600;cursor:pointer;font-family:inherit}
@@ -243,6 +244,9 @@ ol.steps small{color:var(--mute);display:block}
 }
 .thumbs{display:flex;gap:5px;align-items:center;flex-wrap:wrap}
 .thumbs .cnt{font-size:11.5px;color:var(--mute)}
+.pdfch{display:inline-block;width:26px;height:26px;line-height:26px;border-radius:4px;
+  border:1px solid var(--line);background:#fdecec;color:#c62828;font-size:9px;font-weight:700;
+  text-align:center;cursor:pointer;vertical-align:middle}
 .thumb{width:26px;height:26px;object-fit:cover;border-radius:4px;border:1px solid var(--line);cursor:pointer;vertical-align:middle}
 .pic{display:flex;align-items:center;gap:6px}
 .pic img{width:30px;height:30px;object-fit:cover;border-radius:5px;border:1px solid var(--line)}
@@ -690,7 +694,7 @@ function setStatus(t){ const el=document.getElementById('hSt'); if(el) el.textCo
 window.addEventListener('beforeunload', e=>{ if(dirty){ e.preventDefault(); e.returnValue='' } });
 
 /* ───────── 서버(공유) 저장 ───────── */
-const APPVER = '2026.96';
+const APPVER = '2026.98';
 const LIBKEY = 'church_ledger_lib_v1';
 const DATASHEET = '_data', DATATAG = 'CHURCH_LEDGER_V1';
 const XLSXMIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -1194,8 +1198,14 @@ function render(){
       snapMemo();
       let i=0;
       (function next(){
-        if(i>=fl.length){ render(); return }
-        shrinkImage(fl[i++], url=>{ memoImgs.push(url); next() }, true);   // 글자가 읽히도록
+        if(i>=fl.length){ moBusy=''; render(); return }
+        const f = fl[i++];
+        if(/pdf/i.test(f.type||'') || /\.pdf$/i.test(f.name||'')){
+          moBusy = `${f.name} 올리는 중입니다…`; render();
+          uploadPdf(f, url=>{ if(url) memoImgs.push(url); next() });
+        } else {
+          shrinkImage(f, url=>{ memoImgs.push(url); next() }, true);      // 글자가 읽히도록
+        }
       })();
     };
     if($('#moPicIn')) $('#moPicIn').onchange=takeMo;
@@ -1204,9 +1214,15 @@ function render(){
   on('[data-med]','click',e=>{ memoEdit=e.target.dataset.med; memoDraft=null; memoOpen=true;
     const t=(S.memos||[]).find(x=>x.id===memoEdit); memoImgs = t&&t.imgs ? t.imgs.slice() : [];
     render(); const el=$('#moText'); if(el) el.focus() });
-  on('[data-mrm]','click',e=>{ if(!confirm('이 자료를 지울까요?')) return;
-    S.memos=(S.memos||[]).filter(x=>x.id!==e.target.dataset.mrm);
-    if(memoEdit===e.target.dataset.mrm) memoEdit=null; save(); render() });
+  on('[data-mrm]','click',async e=>{
+    const id=e.target.dataset.mrm, t=(S.memos||[]).find(x=>x.id===id);
+    const refs=(t&&t.imgs||[]).filter(isPdfRef);
+    if(!confirm('이 자료를 지울까요?'+(refs.length?`\n드라이브에 올린 문서 ${refs.length}개도 함께 지웁니다.`:''))) return;
+    S.memos=(S.memos||[]).filter(x=>x.id!==id);
+    if(memoEdit===id) memoEdit=null;
+    save(); render();
+    for(const u of refs){ try{ await api('delfile',{id:pdfId(u)}) }catch(err){} }
+  });
   on('[data-mimg]','click',e=>{ const t=(S.memos||[]).find(x=>x.id===e.target.dataset.mimg);
     if(t && (t.imgs||[]).length) showImgs(t.imgs, 0) });
 
@@ -1724,11 +1740,40 @@ function shrinkImage(file, cb, big){
   fr.onerror = function(){ alert('사진을 읽을 수 없습니다.') };
   fr.readAsDataURL(file);
 }
+const PDF_MAX = 20 * 1048576;            // 드라이브에 올릴 문서는 20MB까지
+function isPdf(u){ return isPdfRef(u) || /^data:application\/pdf/.test(String(u||'')) }
+function isPdfRef(u){ return /^pdf\|/.test(String(u||'')) }
+function pdfName(u){ const p=String(u).split('|'); return p[1]||'문서.pdf' }
+function pdfId(u){ const p=String(u).split('|'); return p[2]||'' }
+function pdfView(u){ return 'https://drive.google.com/file/d/'+pdfId(u)+'/view' }
+function pdfPrev(u){ return 'https://drive.google.com/file/d/'+pdfId(u)+'/preview' }
+
+async function uploadPdf(file, cb){                 // 드라이브에 올리고 주소만 받아 둔다
+  if(!serverOn()){ alert('서버 주소가 설정되지 않아 문서를 올릴 수 없습니다.'); return }
+  if(file.size > PDF_MAX){
+    alert('문서가 너무 큽니다. 20MB 이내로 올려 주세요.\n\n지금 파일: '
+      + (file.size/1048576).toFixed(1) + 'MB');
+    return;
+  }
+  const fr = new FileReader();
+  fr.onload = async function(){
+    try{
+      const j = await api('upfile', {name:file.name, data:String(fr.result||'')});
+      cb('pdf|'+String(j.name||file.name).replace(/\|/g,'-')+'|'+j.id);
+    }catch(e){
+      alert('문서를 올리지 못했습니다.\n\n'+(e&&e.message?e.message:e)
+        +'\n\n서버(앱스 스크립트)를 새 버전으로 배포했는지 확인해 주세요.');
+      cb(null);
+    }
+  };
+  fr.onerror = function(){ alert('문서를 읽을 수 없습니다.'); cb(null) };
+  fr.readAsDataURL(file);
+}
 function imgStats(){
   let n=0, b=0;
   P.forEach(p=>ents(p.k).forEach(e=>{ if(e.img){ n++; b+=e.img.length } }));
   (S.plan||[]).forEach(e=>{ if(e.img){ n++; b+=e.img.length } });
-  (S.memos||[]).forEach(e=>(e.imgs||[]).forEach(u=>{ n++; b+=u.length }));
+  (S.memos||[]).forEach(e=>(e.imgs||[]).forEach(u=>{ if(isPdfRef(u)) return; n++; b+=u.length }));
   return {n:n, mb:(b/1048576)};
 }
 function showImg(src){ showImgs([src], 0) }
@@ -1744,27 +1789,41 @@ function showImgs(list, idx){
     '<div class="ovbar"><span class="ovn"></span>'
     + '<span class="ovz"><button class="ovout">－</button><span class="ovpc">100%</span>'
     + '<button class="ovin">＋</button><button class="ovfit">원래대로</button></span>'
-    + '<button class="ovx">닫기</button></div>'
+    + '<button class="ovopen">새 창에서 열기</button><button class="ovx">닫기</button></div>'
     + '<div class="ovmain"><button class="ovp">‹</button>'
-    + '<div class="ovwrap"><img></div><button class="ovnx">›</button></div>'
+    + '<div class="ovwrap"><img><iframe class="ovpdf"></iframe></div><button class="ovnx">›</button></div>'
     + '<div class="ovtip"></div>';
 
   const img  = ov.querySelector('img');
+  const pdf  = ov.querySelector('.ovpdf');
   const wrap = ov.querySelector('.ovwrap');
   const num  = ov.querySelector('.ovn');
   const pc   = ov.querySelector('.ovpc');
   const tip  = ov.querySelector('.ovtip');
 
   function apply(){
+    const doc = isPdf(list[i]);
     img.style.transform = 'translate('+tx+'px,'+ty+'px) scale('+sc+')';
     pc.textContent = Math.round(sc*100)+'%';
-    wrap.style.cursor = sc>1 ? 'grab' : 'zoom-in';
-    tip.textContent = sc>1 ? '끌어서 움직이세요. 넘기려면 먼저 [원래대로]를 누르세요.'
-                           : (list.length>1 ? '옆으로 밀거나 화살표로 넘깁니다. 사진을 누르면 커집니다.' : '사진을 누르면 커집니다.');
+    wrap.style.cursor = doc ? 'default' : (sc>1 ? 'grab' : 'zoom-in');
+    tip.textContent = doc ? (isPdfRef(list[i])
+        ? '구글 드라이브에 보관된 문서입니다. 잘 안 보이면 [새 창에서 열기]를 누르세요.'
+        : 'PDF 문서입니다.')
+      : sc>1 ? '끌어서 움직이세요. 넘기려면 먼저 [원래대로]를 누르세요.'
+             : (list.length>1 ? '옆으로 밀거나 화살표로 넘깁니다. 사진을 누르면 커집니다.' : '사진을 누르면 커집니다.');
   }
   function zoom(v){ sc = Math.max(1, Math.min(5, v)); if(sc===1){ tx=0; ty=0 } apply() }
   function draw(){
-    img.src = list[i]; num.textContent = (i+1)+' / '+list.length;
+    const cur = list[i], doc = isPdf(cur), ref = isPdfRef(cur);
+    img.style.display = doc?'none':'';
+    pdf.style.display = doc?'':'none';
+    ov.querySelector('.ovz').style.display = doc?'none':'';   // 문서는 자체 확대 기능을 쓴다
+    const ob = ov.querySelector('.ovopen');
+    ob.style.display = ref?'':'none';
+    if(ref) ob.onclick = function(e){ e.stopPropagation(); window.open(pdfView(cur), '_blank') };
+    if(doc){ pdf.src = ref? pdfPrev(cur) : cur; img.removeAttribute('src') }
+    else { pdf.removeAttribute('src'); img.src = cur }
+    num.textContent = (i+1)+' / '+list.length + (ref? ' · '+pdfName(cur) : '');
     ov.querySelector('.ovp').style.visibility  = list.length>1?'visible':'hidden';
     ov.querySelector('.ovnx').style.visibility = list.length>1?'visible':'hidden';
     zoom(1);                                        // 사진을 바꾸면 배율을 되돌린다
@@ -1791,7 +1850,7 @@ function showImgs(list, idx){
     if(sc>1){ tx=px+(e.touches[0].clientX-sx); ty=py+(e.touches[0].clientY-sy); apply() }
   }, {passive:true});
   wrap.addEventListener('touchend', function(e){
-    if(multi || sc>1) return;                       // 두 손가락이거나 확대 중이면 넘기지 않는다
+    if(multi || sc>1 || isPdf(list[i])) return;     // 두 손가락·확대 중·문서는 넘기지 않는다
     var t=e.changedTouches[0], dx=t.clientX-sx, dy=t.clientY-sy;
     if(Math.abs(dx)>60 && Math.abs(dx)>Math.abs(dy)*1.5) go(dx<0?1:-1);
   }, {passive:true});
@@ -1824,7 +1883,7 @@ function showImgs(list, idx){
 
 
 /* ── 자료 ── */
-let memoEdit=null, memoImgs=[], memoDraft=null, memoOpen=true, memoAdd=null;
+let memoEdit=null, memoImgs=[], memoDraft=null, memoOpen=true, memoAdd=null, moBusy='';
 function todayISO(){ const d=new Date();
   return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0') }
 function vMemo(){
@@ -1850,20 +1909,23 @@ function vMemo(){
           <input type="text" id="moEtc" value="${ed?esc(ed.etc):dr?esc(dr.etc):''}" placeholder="비고"></div>
         <span class="pic">
           ${hasCam?`<button class="btn g" id="moPicCam">📷 촬영</button>`:''}
-          <button class="btn g" id="moPic">🖼 사진</button>
-          <input type="file" id="moPicIn" accept="image/*" multiple style="display:none">
+          <button class="btn g" id="moPic">🖼 사진·PDF</button>
+          <input type="file" id="moPicIn" accept="image/*,application/pdf" multiple style="display:none">
           <input type="file" id="moPicCamIn" accept="image/*" capture="environment" style="display:none">
         </span>
         <button class="btn" id="moAdd">${ed?'수정':'완료'}</button>
         ${ed?`<button class="btn g" id="moCancel">취소</button>`:''}
       </div>
+      ${moBusy?`<div class="fr"><span class="lg-busy">${esc(moBusy)}</span></div>`:''}
       ${memoImgs.length?`<div class="fr">
         <span class="hint" style="margin:0">사진 ${memoImgs.length}장</span>
-        <span class="thumbs">${memoImgs.map((u,i)=>`<img class="thumb" src="${u}" data-mopv="${i}" title="${i+1}번째 — 눌러서 보기">`).join('')}</span>
+        <span class="thumbs">${memoImgs.map((u,i)=>isPdf(u)
+          ? `<span class="pdfch" data-mopv="${i}" title="${esc(pdfName(u))} — 눌러서 보기">PDF</span>`
+          : `<img class="thumb" src="${u}" data-mopv="${i}" title="${i+1}번째 — 눌러서 보기">`).join('')}</span>
         <button class="btn g sm" id="moPicClr">사진 모두 빼기</button>
         <button class="btn g sm" id="moPicPop">마지막 한 장 빼기</button>
       </div>`:''}
-      ${ed?'':`<p class="hint" style="margin:0">날짜는 오늘(${fmtDate(todayISO())})로 저절로 들어갑니다. 사진은 찍은 순서대로 쌓이며, 계약서 글자가 읽히도록 크게 저장됩니다.</p>`}
+      ${ed?'':`<p class="hint" style="margin:0">날짜는 오늘(${fmtDate(todayISO())})로 저절로 들어갑니다. 사진은 찍은 순서대로 쌓이며, 계약서 글자가 읽히도록 크게 저장됩니다. PDF는 구글 드라이브에 올라가고 장부에는 주소만 담기므로 20MB까지 됩니다.</p>`}
     </div>
 
     <div class="scroll"><table class="ml">
@@ -1874,7 +1936,9 @@ function vMemo(){
         ${list.map(e=>`<tr data-mrow="${e.id}">
           <td>${e.date?fmtDate(e.date):''}</td>
           <td class="nw">${esc(e.text)}</td>
-          <td class="c no-print">${(e.imgs||[]).length?`<img class="thumb" src="${e.imgs[0]}" data-mimg="${e.id}" title="사진 ${e.imgs.length}장 — 눌러서 보기">${e.imgs.length>1?`<div class="cnt">${e.imgs.length}장</div>`:''}`:''}</td>
+          <td class="c no-print">${(e.imgs||[]).length?`${isPdf(e.imgs[0])
+            ? `<span class="pdfch" data-mimg="${e.id}" title="${e.imgs.length}개 — 눌러서 보기">PDF</span>`
+            : `<img class="thumb" src="${e.imgs[0]}" data-mimg="${e.id}" title="${e.imgs.length}개 — 눌러서 보기">`}${e.imgs.length>1?`<div class="cnt">${e.imgs.length}개</div>`:''}`:''}</td>
           <td class="nw">${esc(e.etc)}</td>
           <td class="c no-print no-ro"><button class="btn g sm no-ro" data-med="${e.id}">✎</button>
             <button class="btn dg sm no-ro" data-mrm="${e.id}">×</button></td></tr>`).join('')}
