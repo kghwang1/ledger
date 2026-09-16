@@ -694,7 +694,7 @@ function setStatus(t){ const el=document.getElementById('hSt'); if(el) el.textCo
 window.addEventListener('beforeunload', e=>{ if(dirty){ e.preventDefault(); e.returnValue='' } });
 
 /* ───────── 서버(공유) 저장 ───────── */
-const APPVER = '2026.100';
+const APPVER = '2026.101';
 const LIBKEY = 'church_ledger_lib_v1';
 const DATASHEET = '_data', DATATAG = 'CHURCH_LEDGER_V1';
 const XLSXMIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -866,6 +866,23 @@ async function api(action, body){
   return j;
 }
 const USERKEY='_users', CACHEKEY='church_ledger_cache_v1', FILEKEY='church_ledger_file_';
+let memoLoaded=false, memoBusy=false;
+function memoKey(){ return '_memo_' + deptName() }
+async function loadMemos(){                        // 자료는 따로 보관하므로 따로 읽는다
+  if(memoLoaded || !serverOn() || !deptName()) return;
+  memoBusy=true; render();
+  try{
+    const j = await api('get', {name:memoKey(), year:S.meta.year});
+    const got = (j.rec && j.rec.data && j.rec.data.memos) || [];
+    if(got.length || !(S.memos||[]).length) S.memos = norm({memos:got}).memos;
+  }catch(e){}                                      // 아직 없으면 그대로 둔다
+  memoLoaded=true; memoBusy=false; render();
+}
+async function saveMemos(){                        // 자료를 고칠 때마다 곧바로 저장
+  if(!serverOn() || !deptName()) return false;
+  try{ await api('save', {name:memoKey(), year:S.meta.year, data:{memos:S.memos||[]}}); return true }
+  catch(e){ alert('자료를 저장하지 못했습니다.\n\n'+(e&&e.message?e.message:e)); return false }
+}
 let preKey='', prePromise=null;                    // 미리 받아오는 중인 파일
 let listFresh=false;                               // 목록을 서버에서 새로 받았는가
 let locked=false;                                  // 가계부 — 열람(잠김) / 작성
@@ -954,10 +971,11 @@ async function srvSave(silent){
   if(!deptName()){ alert('안내 탭 기본 정보에 작성 부서명을 먼저 입력하세요.'); return false }
   setStatus('서버에 저장 중…');
   try{
-    await api('save', {name:deptName(), year:S.meta.year, data:S});
+    const light = Object.assign({}, S); delete light.memos;   // 자료는 따로 보관한다
+    await api('save', {name:deptName(), year:S.meta.year, data:light});
 
     // 서버에 제대로 들어갔는지 다시 읽어 확인한다
-    const mine = countAll(S);
+    const mine = countAll(light);
     let back=null;
     try{ const j = await api('get', {name:deptName(), year:S.meta.year}); back = j.rec }catch(e){}
     if(!back || countAll(back.data) !== mine){
@@ -1158,7 +1176,7 @@ function render(){
     if(k==='plan' && tab!=='plan'){ planEdit=null; planImg=''; planDraft=null; planOpen=true }
     if(k!=='memo' && memoPending() &&
        !confirm('자료 탭에 아직 [완료]를 누르지 않은 입력이 있습니다.\n다른 탭으로 가면 사라집니다. 계속할까요?')) return;
-    if(k==='memo' && tab!=='memo'){ memoEdit=null; memoImgs=[]; memoDraft=null; memoOpen=true }
+    if(k==='memo' && tab!=='memo'){ memoEdit=null; memoImgs=[]; memoDraft=null; memoOpen=true; loadMemos() }
     if(k==='ledger' && tab!=='ledger'){                 // 출납부를 열면 오늘 날짜의 분기·달로
       const t=todayPeriod();
       if(t){ per=t.k; mfil=t.m } 
@@ -1186,6 +1204,7 @@ function render(){
       memoImgs=[]; memoDraft=null; memoOpen=false;
       try{ if(document.activeElement && document.activeElement.blur) document.activeElement.blur() }catch(e){}
       save(); render();
+      saveMemos().then(ok=>{ if(ok){ srvMsg='자료를 저장했습니다 · '+nowT(); render() } });
     };
     $('#moAdd').onclick=addMemo;
     ['moText','moEtc'].forEach(id=>{ const el=$('#'+id); if(el) el.onkeydown=ev=>{ if(ev.key==='Enter') addMemo() } });
@@ -1231,6 +1250,7 @@ function render(){
     S.memos=(S.memos||[]).filter(x=>x.id!==id);
     if(memoEdit===id) memoEdit=null;
     save(); render();
+    await saveMemos();
     for(const u of refs){ try{ await api('delfile',{id:pdfId(u)}) }catch(err){} }
   });
   on('[data-mimg]','click',e=>{ const t=(S.memos||[]).find(x=>x.id===e.target.dataset.mimg);
@@ -1911,6 +1931,7 @@ function vMemo(){
   const hasCam = (navigator.maxTouchPoints||0) > 0;
   return `
   ${pHead(`${S.meta.dept} 자료`, '적어 두고 싶은 내용을 사진과 함께 남깁니다')}
+  <div class="note no-print">자료는 <b>[완료]를 누를 때 곧바로 저장</b>됩니다. 위쪽 [저장] 버튼과 따로 보관되어 장부 저장이 빨라집니다.</div>
   <div class="card">
     <h2 class="no-print">자료
       <button class="btn g sm" style="margin-left:10px;vertical-align:middle" onclick="window.print()">인쇄 (A4)</button></h2>
@@ -1934,7 +1955,8 @@ function vMemo(){
         <button class="btn" id="moAdd" ${moBusy?'disabled':''}>${moBusy?'올리는 중…':(ed?'수정':'완료')}</button>
         ${ed?`<button class="btn g" id="moCancel">취소</button>`:''}
       </div>
-      ${moBusy?`<div class="fr"><span class="lg-busy">${esc(moBusy)}</span></div>`:''}
+      ${memoBusy?`<p class="lg-busy" style="margin:0 0 10px">자료를 불러오는 중입니다…</p>`:''}
+    ${moBusy?`<div class="fr"><span class="lg-busy">${esc(moBusy)}</span></div>`:''}
       ${memoImgs.length?`<div class="fr">
         <span class="hint" style="margin:0">사진 ${memoImgs.length}장</span>
         <span class="thumbs">${memoImgs.map((u,i)=>isPdf(u)
@@ -2853,7 +2875,7 @@ function bindCover(){
     } else {
       if(!confirm(`${authDept} 장부를 새로 시작합니다. 계속할까요?`)) return;
     }
-    S=norm(fresh()); S.meta.dept=authDept; S.meta.year=yr;
+    S=norm(fresh()); S.meta.dept=authDept; S.meta.year=yr; memoLoaded=true;
     if(authRole==='home'){ S.meta.church='가계부'; S.meta.writer='' }
     else { S.meta.writer=authName; S.meta.church='신대중앙교회' }
     curFile=''; enterApp();
@@ -2870,7 +2892,7 @@ function bindCover(){
       if(!listFresh) await loadDeptList();          // 목록부터 최신으로 맞춘다
       const rec = (preKey===selFile && prePromise) ? (await prePromise) || (await getRec(selFile))
                                                   : (await getRec(selFile));
-      S=norm(rec.data); curFile=`${p[0]}_${p[1]}`;
+      S=norm(rec.data); curFile=`${p[0]}_${p[1]}`; memoLoaded=false;
       S.meta.dept = p[0];                              // 파일 이름과 부서명을 항상 맞춘다
       S.meta.year = Number(p[1]) || S.meta.year;
       if(authRole==='view'){ ro=true; roName=p[0]; guideMode='view' }
@@ -2899,6 +2921,7 @@ function tryLogin(){
 }
 function enterApp(){
   locked = (authRole==='home');            // 가계부는 열람으로 시작
+  if(authRole==='home') setTimeout(loadMemos, 0);
   screen='app'; tab=(authRole==='home'?'memo':'guide'); per='Q1'; editId=null; srvMsg=''; mine=null;
   save(); render(); window.scrollTo(0,0);
 }
