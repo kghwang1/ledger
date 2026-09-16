@@ -694,7 +694,7 @@ function setStatus(t){ const el=document.getElementById('hSt'); if(el) el.textCo
 window.addEventListener('beforeunload', e=>{ if(dirty){ e.preventDefault(); e.returnValue='' } });
 
 /* ───────── 서버(공유) 저장 ───────── */
-const APPVER = '2026.101';
+const APPVER = '2026.102';
 const LIBKEY = 'church_ledger_lib_v1';
 const DATASHEET = '_data', DATATAG = 'CHURCH_LEDGER_V1';
 const XLSXMIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -1134,7 +1134,7 @@ function render(){
   if(hd) hd.style.display='';
   if(tab==='next' && authRole==='home') tab='guide';
   if(tab==='memo' && authRole!=='home') tab='guide';
-  if(tab==='guide' && authRole==='home') tab='memo';
+  if(tab==='guide' && authRole==='home') tab='settle';
   document.getElementById('hTitle').textContent = ro
     ? `${S.meta.year}년 ${roName} 자료열람`
     : (authRole==='home' ? `${S.meta.dept||''} 회계장부`
@@ -1955,7 +1955,7 @@ function vMemo(){
         <button class="btn" id="moAdd" ${moBusy?'disabled':''}>${moBusy?'올리는 중…':(ed?'수정':'완료')}</button>
         ${ed?`<button class="btn g" id="moCancel">취소</button>`:''}
       </div>
-      ${memoBusy?`<p class="lg-busy" style="margin:0 0 10px">자료를 불러오는 중입니다…</p>`:''}
+
     ${moBusy?`<div class="fr"><span class="lg-busy">${esc(moBusy)}</span></div>`:''}
       ${memoImgs.length?`<div class="fr">
         <span class="hint" style="margin:0">사진 ${memoImgs.length}장</span>
@@ -1968,6 +1968,7 @@ function vMemo(){
       ${ed?'':`<p class="hint" style="margin:0">날짜는 오늘(${fmtDate(todayISO())})로 저절로 들어갑니다. 사진은 찍은 순서대로 쌓이며, 계약서 글자가 읽히도록 크게 저장됩니다. PDF는 구글 드라이브에 올라가고 장부에는 주소만 담기므로 20MB까지 됩니다.</p>`}
     </div>
 
+    ${memoBusy?`<p class="lg-busy" style="margin:0 0 12px">자료를 읽는 중…</p>`:''}
     <div class="scroll"><table class="ml">
       <thead><tr><th style="width:54px">날짜</th><th class="nw" style="width:132px">자료내용</th>
         <th class="c no-print" style="width:44px">사진</th><th class="nw" style="width:100px">기타</th>
@@ -1982,7 +1983,7 @@ function vMemo(){
           <td class="nw">${esc(e.etc)}</td>
           <td class="c no-print no-ro"><button class="btn g sm no-ro" data-med="${e.id}">✎</button>
             <button class="btn dg sm no-ro" data-mrm="${e.id}">×</button></td></tr>`).join('')}
-        ${list.length?'':'<tr><td colspan="5" class="hint" style="padding:14px">아직 적어 둔 자료가 없습니다.</td></tr>'}
+        ${list.length?'':`<tr><td colspan="5" class="hint" style="padding:14px">${memoBusy?'자료를 읽는 중…':'아직 적어 둔 자료가 없습니다.'}</td></tr>`}
       </tbody></table></div>
     ${list.length?'<p class="swipe">← 표를 옆으로 밀면 기타 내용을 볼 수 있습니다 →</p>':''}
   </div>
@@ -2922,7 +2923,7 @@ function tryLogin(){
 function enterApp(){
   locked = (authRole==='home');            // 가계부는 열람으로 시작
   if(authRole==='home') setTimeout(loadMemos, 0);
-  screen='app'; tab=(authRole==='home'?'memo':'guide'); per='Q1'; editId=null; srvMsg=''; mine=null;
+  screen='app'; tab=(authRole==='home'?'settle':'guide'); per='Q1'; editId=null; srvMsg=''; mine=null;
   save(); render(); window.scrollTo(0,0);
 }
 function exitApp(){
@@ -3083,7 +3084,7 @@ function bind(){
     tab='print'; render(); window.scrollTo(0,0);
     setTimeout(()=>{ try{ window.print() }catch(e){} }, 350);
   };
-  if($('#prBack')) $('#prBack').onclick=()=>{ tab=(authRole==='home'?'memo':'guide'); cvOpen=false; render(); window.scrollTo(0,0) };
+  if($('#prBack')) $('#prBack').onclick=()=>{ tab=(authRole==='home'?'settle':'guide'); cvOpen=false; render(); window.scrollTo(0,0) };
   if($('#cvEdit')) $('#cvEdit').onclick=()=>{ cvOpen=!cvOpen; render() };
   if($('#cvDone')) $('#cvDone').onclick=()=>{ cvOpen=false; render() };
   if($('#cvReset')) $('#cvReset').onclick=()=>{
