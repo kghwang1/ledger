@@ -694,7 +694,7 @@ function setStatus(t){ const el=document.getElementById('hSt'); if(el) el.textCo
 window.addEventListener('beforeunload', e=>{ if(dirty){ e.preventDefault(); e.returnValue='' } });
 
 /* ───────── 서버(공유) 저장 ───────── */
-const APPVER = '2026.102';
+const APPVER = 'C1.0';
 const LIBKEY = 'church_ledger_lib_v1';
 const DATASHEET = '_data', DATATAG = 'CHURCH_LEDGER_V1';
 const XLSXMIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -1370,7 +1370,6 @@ function vCover(){
         <div class="lg-btns">
           <button class="lg-pick ${authRole==='write'?'on':''}" data-role="write">출납부 작성</button>
           <button class="lg-pick ${authRole==='view'?'on':''}" data-role="view">자료 열람</button>
-          <button class="lg-pick ${authRole==='home'?'on':''}" data-role="home">가계부</button>
         </div>
       </div>
 
@@ -2696,25 +2695,6 @@ function vData(){
   </div>
 
   <div class="card">
-    <h2>가계부 설정</h2>
-    <p class="hint">시작 화면의 <b>가계부</b>에서 고를 구분과 암호입니다. 암호를 비워 두면 누구나 들어옵니다.</p>
-    <div class="dchips">
-      ${homes.map((x,i)=>`<span class="dchip">${esc(x)}<button data-hdel="${i}" title="지우기">×</button></span>`).join('')}
-      ${homes.length?'':'<span class="hint">구분이 없습니다. 아래에서 넣으세요.</span>'}
-    </div>
-    <div class="tools" style="margin-top:10px">
-      <input type="text" id="hName" placeholder="구분 이름 (예: 카페)" style="max-width:190px">
-      <button class="btn" id="hAdd">구분 추가</button>
-    </div>
-    <div class="tools" style="margin-top:12px">
-      <span class="hint" style="margin:0">암호</span>
-      <input type="text" id="hPw" value="${esc(homePw)}" placeholder="비워 두면 확인 안 함" style="max-width:190px">
-      <span class="hint" style="margin:0">${homePw?'설정됨':'설정 안 됨'}</span>
-    </div>
-    <p class="hint" style="margin:10px 0 0">아래 <b>서버에 저장</b>을 눌러야 다른 기기에도 적용됩니다.</p>
-  </div>
-
-  <div class="card">
     <h2>사용자 등록</h2>
     <p class="hint">여기 등록된 부서·이름만 시작 화면에서 들어올 수 있습니다. 아무도 등록하지 않으면 누구나 들어옵니다.</p>
     ${users.length? `<table class="wb" style="margin-bottom:12px"><thead><tr><th style="width:110px">부서</th><th>이름</th><th class="c" style="width:44px"></th></tr></thead><tbody>
@@ -3142,15 +3122,6 @@ function bind(){
   };
   on('[data-lib-read]','click',e=>readDept(e.target.dataset.libRead));
   on('[data-lib-del]','click',e=>{ delete LIB[e.target.dataset.libDel.slice(5)]; saveLib(); render() });
-  if($('#hAdd')) $('#hAdd').onclick=()=>{
-    const nm=($('#hName').value||'').trim();
-    if(!nm){ alert('구분 이름을 넣으세요.'); return }
-    if(homes.indexOf(nm)>=0){ alert('이미 있는 구분입니다.'); return }
-    homes.push(nm); render();
-  };
-  const hn=$('#hName'); if(hn) hn.onkeydown=ev=>{ if(ev.key==='Enter') $('#hAdd').click() };
-  on('[data-hdel]','click',e=>{ homes.splice(+e.target.dataset.hdel,1); render() });
-  const hp=$('#hPw'); if(hp) hp.onchange=()=>{ homePw=hp.value.trim(); render() };
   if($('#dAdd')) $('#dAdd').onclick=()=>{
     const nm=($('#dName').value||'').trim();
     if(!nm){ alert('부서 이름을 넣으세요.'); return }
