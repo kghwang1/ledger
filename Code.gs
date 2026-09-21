@@ -1,5 +1,5 @@
 /**********************************************************************
- * 교회 부서 회계장부 — 자료 보관 서버
+ * 교회 부서 회계장부 · 가계부 — 자료 보관 서버  (2026-09 · 드라이브 목록 추가)
  *
  * 고치는 방법
  *  1) script.google.com 에서 만들어 둔 프로젝트를 엽니다.
@@ -23,6 +23,9 @@ function doPost(e) {
     if      (req.action === 'save') out = save_(folder, req);
     else if (req.action === 'list') out = list_(folder);
     else if (req.action === 'get')  out = get_(folder, req);
+    else if (req.action === 'upfile') out = upfile_(folder, req);
+    else if (req.action === 'delfile') out = delfile_(req);
+    else if (req.action === 'drive') out = drive_(folder, req);
     else if (req.action === 'ping') out = { ok: true, folder: FOLDER };
     else throw new Error('알 수 없는 요청입니다');
   } catch (err) {
@@ -75,6 +78,71 @@ function findFiles_(folder, name, year) {
   }
   out.sort(function (a, b) { return b.getLastUpdated().getTime() - a.getLastUpdated().getTime(); });
   return out;
+}
+
+/* ── 첨부 문서(PDF 등) ── */
+
+function attachFolder_(folder) {
+  var it = folder.getFoldersByName('첨부');
+  return it.hasNext() ? it.next() : folder.createFolder('첨부');
+}
+
+function upfile_(folder, req) {
+  if (!req.data) throw new Error('올릴 파일이 없습니다');
+  var m = String(req.data).match(/^data:([^;]+);base64,([\s\S]*)$/);
+  if (!m) throw new Error('파일 형식을 알 수 없습니다');
+
+  var name = clean_(req.name || '문서.pdf');
+  var blob = Utilities.newBlob(Utilities.base64Decode(m[2]), m[1], name);
+  var f = attachFolder_(folder).createFile(blob);
+
+  try {                                  // 주소를 아는 사람은 볼 수 있게 (미리보기용)
+    f.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  } catch (e) {}
+
+  return { ok: true, id: f.getId(), name: f.getName(), size: f.getSize() };
+}
+
+function delfile_(req) {
+  if (!req.id) throw new Error('지울 파일을 알 수 없습니다');
+  try { DriveApp.getFileById(req.id).setTrashed(true); } catch (e) {}
+  return { ok: true };
+}
+
+/* ── 자료 탭 › 구글 드라이브 목록 ──
+   root 가 있으면 그 폴더, 없으면 교회회계자료 › (구분)자료 폴더를 보여 준다 */
+function drive_(folder, req) {
+  var root;
+  if (req.root) {
+    root = DriveApp.getFolderById(req.root);
+  } else {
+    var nm = clean_(req.rootName || '자료');
+    var it = folder.getFoldersByName(nm);
+    root = it.hasNext() ? it.next() : folder.createFolder(nm);
+  }
+  var cur = req.id ? DriveApp.getFolderById(req.id) : root;
+
+  var folders = [], files = [];
+  var fi = cur.getFolders();
+  while (fi.hasNext()) {
+    var f = fi.next();
+    if (f.isTrashed()) continue;
+    folders.push({ id: f.getId(), name: f.getName(), at: f.getLastUpdated().getTime() });
+  }
+  var xi = cur.getFiles();
+  while (xi.hasNext()) {
+    var x = xi.next();
+    if (x.isTrashed()) continue;
+    files.push({ id: x.getId(), name: x.getName(), mime: x.getMimeType(),
+                 size: x.getSize(), at: x.getLastUpdated().getTime(), url: x.getUrl() });
+  }
+  var byName = function (a, b) { return a.name.localeCompare(b.name, 'ko'); };
+  folders.sort(byName); files.sort(byName);
+
+  return { ok: true,
+           root: { id: root.getId(), name: root.getName(), url: root.getUrl() },
+           cur:  { id: cur.getId(),  name: cur.getName(),  url: cur.getUrl() },
+           folders: folders, files: files };
 }
 
 function save_(folder, req) {
