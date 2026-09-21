@@ -261,6 +261,7 @@ ol.steps small{color:var(--mute);display:block}
   table.ws{min-width:290px}          /* 현재 상황·소계 */
   table.pl{min-width:560px}          /* 지출예정 내역 */
   table.ml{min-width:386px}          /* 자료 */
+  table.drv{min-width:300px}
   table.wp{min-width:480px}          /* 지출예정 소계 */
   table.we{min-width:400px}          /* 결산 (수입·지출 같은 폭) */
   table.wi2{min-width:200px}         /* 수입 계획 */
@@ -330,6 +331,12 @@ ol.steps small{color:var(--mute);display:block}
   .sign div{border-top:.6pt solid #000}
   ol.steps{font-size:8.6pt}
 }
+.drv-crumb{font-size:14px;margin:4px 0 8px;line-height:1.7}
+.drv-crumb a{color:var(--accent,#1d6b4f)}
+table.drv td a{text-decoration:none;color:inherit;display:block;padding:2px 0}
+table.drv td a:hover{text-decoration:underline}
+table.drv td a.drv-a{color:#1a56b0}
+table.drv td a.drv-f{font-weight:600}
 </style>
 
 <header>
@@ -694,7 +701,7 @@ function setStatus(t){ const el=document.getElementById('hSt'); if(el) el.textCo
 window.addEventListener('beforeunload', e=>{ if(dirty){ e.preventDefault(); e.returnValue='' } });
 
 /* ───────── 서버(공유) 저장 ───────── */
-const APPVER = 'H1.0';
+const APPVER = 'H1.1';
 const LIBKEY = 'church_ledger_lib_v1';
 const DATASHEET = '_data', DATATAG = 'CHURCH_LEDGER_V1';
 const XLSXMIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -874,13 +881,14 @@ async function loadMemos(){                        // 자료는 따로 보관하
   try{
     const j = await api('get', {name:memoKey(), year:S.meta.year});
     const got = (j.rec && j.rec.data && j.rec.data.memos) || [];
+    driveRoot = (j.rec && j.rec.data && j.rec.data.driveRoot) || '';
     if(got.length || !(S.memos||[]).length) S.memos = norm({memos:got}).memos;
   }catch(e){}                                      // 아직 없으면 그대로 둔다
   memoLoaded=true; memoBusy=false; render();
 }
 async function saveMemos(){                        // 자료를 고칠 때마다 곧바로 저장
   if(!serverOn() || !deptName()) return false;
-  try{ await api('save', {name:memoKey(), year:S.meta.year, data:{memos:S.memos||[]}}); return true }
+  try{ await api('save', {name:memoKey(), year:S.meta.year, data:{memos:S.memos||[], driveRoot:driveRoot||''}}); return true }
   catch(e){ alert('자료를 저장하지 못했습니다.\n\n'+(e&&e.message?e.message:e)); return false }
 }
 let preKey='', prePromise=null;                    // 미리 받아오는 중인 파일
@@ -1176,7 +1184,8 @@ function render(){
     if(k==='plan' && tab!=='plan'){ planEdit=null; planImg=''; planDraft=null; planOpen=true }
     if(k!=='memo' && memoPending() &&
        !confirm('자료 탭에 아직 [완료]를 누르지 않은 입력이 있습니다.\n다른 탭으로 가면 사라집니다. 계속할까요?')) return;
-    if(k==='memo' && tab!=='memo'){ memoEdit=null; memoImgs=[]; memoDraft=null; memoOpen=true; loadMemos() }
+    if(k==='memo' && tab!=='memo'){ memoEdit=null; memoImgs=[]; memoDraft=null; memoOpen=true;
+      loadMemos().then(()=>driveLoad()) }
     if(k==='ledger' && tab!=='ledger'){                 // 출납부를 열면 오늘 날짜의 분기·달로
       const t=todayPeriod();
       if(t){ per=t.k; mfil=t.m } 
@@ -1187,6 +1196,27 @@ function render(){
     tab=k; render(); window.scrollTo(0,0);
   });
   if($('#fMore')) $('#fMore').onclick=()=>{ formOpen=true; focusType=true; render() };
+
+  /* ── 자료 › 드라이브 ── */
+  if($('#drvRe')) $('#drvRe').onclick=()=>driveLoad(true);
+  if($('#drvSetBtn')) $('#drvSetBtn').onclick=()=>{ drvSet=!drvSet; render() };
+  if($('#drvRootNo')) $('#drvRootNo').onclick=()=>{ drvSet=false; render() };
+  const setRoot=async v=>{
+    driveRoot=v; drvPath=[]; drvData=null; drvSet=false;
+    await saveMemos(); driveLoad(true);
+  };
+  if($('#drvRootOk')) $('#drvRootOk').onclick=()=>{
+    const raw=$('#drvRootIn').value.trim();
+    if(!raw){ setRoot(''); return }
+    const id=drvFolderId(raw);
+    if(!id){ alert('폴더 주소를 알아볼 수 없습니다.\n드라이브에서 폴더를 연 뒤 주소창 주소를 붙여 넣으세요.'); return }
+    setRoot(id);
+  };
+  if($('#drvRootDef')) $('#drvRootDef').onclick=()=>setRoot('');
+  on('[data-drvin]','click',e=>{ e.preventDefault(); const a=e.currentTarget;
+    drvPath.push({id:a.dataset.drvin, name:a.dataset.drvnm}); driveLoad() });
+  on('[data-drvup]','click',e=>{ e.preventDefault();
+    drvPath=drvPath.slice(0, +e.currentTarget.dataset.drvup); driveLoad() });
 
   /* ── 자료 ── */
   if($('#moMore')) $('#moMore').onclick=()=>{ memoOpen=true; render(); const el=$('#moText'); if(el) el.focus() };
@@ -1904,6 +1934,89 @@ function showImgs(list, idx){
 }
 
 
+/* ── 자료 › 구글 드라이브 ── */
+let driveRoot='';                        // 보여 줄 드라이브 폴더 (비우면 기본 폴더)
+let drvPath=[];                          // 들어간 폴더 차례 [{id,name}]
+let drvData=null, drvBusy=false, drvErr='', drvSet=false;
+const drvCache={};
+function drvRootName(){ return deptName()+'자료' }
+function drvFolderId(v){                 // 폴더 주소나 아이디에서 아이디만 뽑는다
+  v=String(v||'').trim();
+  let m=v.match(/folders\/([\w-]{10,})/) || v.match(/[?&]id=([\w-]{10,})/);
+  if(m) return m[1];
+  return /^[\w-]{10,}$/.test(v) ? v : '';
+}
+async function driveLoad(force){
+  if(!serverOn() || !deptName()) return;
+  const cur = drvPath.length ? drvPath[drvPath.length-1].id : '';
+  const ck = (driveRoot||'_')+'>'+cur;
+  if(!force && drvCache[ck]){ drvData=drvCache[ck]; drvErr=''; render(); return }
+  drvBusy=true; drvErr=''; render();
+  try{
+    const j = await api('drive', {root:driveRoot||'', rootName:drvRootName(), id:cur});
+    if(!j.cur) throw new Error('');                // 예전 서버는 목록을 돌려주지 않는다
+    drvData = drvCache[ck] = j;
+  }catch(e){
+    const m = String(e&&e.message?e.message:e);
+    drvErr = /알 수 없|unknown|지원/i.test(m) || !m
+      ? '서버(앱스 스크립트)에 드라이브 목록 기능이 아직 없습니다. Code.gs를 고쳐 새 버전으로 배포해 주세요.'
+      : '드라이브 목록을 읽지 못했습니다. ' + m;
+  }
+  drvBusy=false; render();
+}
+function drvIcon(m){
+  m=String(m||'');
+  if(/pdf/.test(m)) return '📄';
+  if(/^image\//.test(m)) return '🖼';
+  if(/spreadsheet|excel|sheet/.test(m)) return '📊';
+  if(/presentation|powerpoint/.test(m)) return '📽';
+  if(/document|word|text/.test(m)) return '📝';
+  if(/^video\//.test(m)) return '🎞';
+  return '📎';
+}
+function drvSize(n){ n=+n||0; if(!n) return '';
+  return n>=1048576 ? (n/1048576).toFixed(1)+'MB' : Math.max(1,Math.round(n/1024))+'KB' }
+function drvDate(t){ if(!t) return ''; const d=new Date(t);
+  return String(d.getFullYear()).slice(2)+'.'+String(d.getMonth()+1).padStart(2,'0')+'.'+String(d.getDate()).padStart(2,'0') }
+function driveCard(){
+  const d=drvData, root=d&&d.root, cur=d&&d.cur;
+  const crumbs = [{id:'', name:root?root.name:drvRootName()}].concat(drvPath);
+  const rows = d ? (d.folders||[]).map(f=>`<tr>
+        <td class="nw"><a href="#" class="drv-f" data-drvin="${esc(f.id)}" data-drvnm="${esc(f.name)}">📁 ${esc(f.name)}</a></td>
+        <td class="c">${drvDate(f.at)}</td><td class="r"></td></tr>`).join('')
+      + (d.files||[]).map(f=>`<tr>
+        <td class="nw"><a href="${esc(f.url)}" target="_blank" rel="noopener" class="drv-a">${drvIcon(f.mime)} ${esc(f.name)}</a></td>
+        <td class="c">${drvDate(f.at)}</td><td class="r">${drvSize(f.size)}</td></tr>`).join('') : '';
+  const empty = d && !(d.folders||[]).length && !(d.files||[]).length;
+  return `<div class="card no-print">
+    <h2>구글 드라이브 자료
+      <button class="btn g sm" id="drvRe" style="margin-left:10px;vertical-align:middle" ${drvBusy?'disabled':''}>새로고침</button>
+      ${cur&&cur.url?`<a class="btn g sm" href="${esc(cur.url)}" target="_blank" rel="noopener" style="vertical-align:middle;text-decoration:none">드라이브에서 열기</a>`:''}
+      <button class="btn g sm no-ro" id="drvSetBtn" style="vertical-align:middle">폴더 바꾸기</button></h2>
+    ${drvSet?`<div class="form" style="margin-bottom:12px">
+      <div class="fr"><div class="fi" style="flex:1 1 100%"><label>보여 줄 드라이브 폴더 주소</label>
+        <input type="text" id="drvRootIn" value="${esc(driveRoot?('https://drive.google.com/drive/folders/'+driveRoot):'')}" placeholder="https://drive.google.com/drive/folders/..."></div></div>
+      <div class="fr"><button class="btn" id="drvRootOk">적용</button>
+        <button class="btn g" id="drvRootDef">기본 폴더로</button>
+        <button class="btn g" id="drvRootNo">닫기</button></div>
+      <p class="hint" style="margin:0">드라이브에서 폴더를 열고 주소창의 주소를 그대로 붙여 넣으세요. 비워 두면 <b>교회회계자료 › ${esc(drvRootName())}</b> 폴더를 보여 줍니다.</p>
+    </div>`:''}
+    <div class="drv-crumb">${crumbs.map((c,i)=> i===crumbs.length-1
+        ? `<b>${esc(c.name)}</b>`
+        : `<a href="#" data-drvup="${i}">${esc(c.name)}</a>`).join(' › ')}</div>
+    ${drvErr?`<p class="hint" style="color:#b3261e;margin:8px 0">${esc(drvErr)}</p>`:''}
+    ${drvBusy?`<p class="lg-busy" style="margin:8px 0">드라이브 목록을 읽는 중…</p>`:''}
+    ${d?`<div class="scroll"><table class="drv">
+      <thead><tr><th>자료명</th><th class="c" style="width:64px">수정일</th><th class="r" style="width:58px">크기</th></tr></thead>
+      <tbody>
+        ${drvPath.length?`<tr><td colspan="3"><a href="#" data-drvup="${drvPath.length-1}">⬑ 위 폴더로</a></td></tr>`:''}
+        ${rows}
+        ${empty?`<tr><td colspan="3" class="hint" style="padding:14px">이 폴더는 비어 있습니다. [드라이브에서 열기]로 파일을 넣어 두세요.</td></tr>`:''}
+      </tbody></table></div>
+      <p class="hint" style="margin:8px 0 0">자료명을 누르면 새 창으로 열립니다.</p>`:''}
+  </div>`;
+}
+
 /* ── 자료 ── */
 let memoEdit=null, memoImgs=[], memoDraft=null, memoOpen=true, memoAdd=null, moBusy='';
 function todayISO(){ const d=new Date();
@@ -1920,6 +2033,7 @@ function vMemo(){
   const hasCam = (navigator.maxTouchPoints||0) > 0;
   return `
   ${pHead(`${S.meta.dept} 자료`, '적어 두고 싶은 내용을 사진과 함께 남깁니다')}
+  ${driveCard()}
   <div class="note no-print">자료는 <b>[완료]를 누를 때 곧바로 저장</b>됩니다. 위쪽 [저장] 버튼과 따로 보관되어 장부 저장이 빨라집니다.</div>
   <div class="card">
     <h2 class="no-print">자료
