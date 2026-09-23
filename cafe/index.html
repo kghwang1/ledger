@@ -694,7 +694,7 @@ function setStatus(t){ const el=document.getElementById('hSt'); if(el) el.textCo
 window.addEventListener('beforeunload', e=>{ if(dirty){ e.preventDefault(); e.returnValue='' } });
 
 /* ───────── 서버(공유) 저장 ───────── */
-const APPVER = 'H2.3';
+const APPVER = 'H2.4';
 const LIBKEY = 'church_ledger_lib_v1';
 const DATASHEET = '_data', DATATAG = 'CHURCH_LEDGER_V1';
 const XLSXMIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -2365,33 +2365,26 @@ function vAllQ(){
               <td class="n">${won(bal)}</td>
               <td class="c no-print no-ro"><button class="btn g sm no-ro" data-qed="${e._k}|${e.id}">✎</button>
                 <button class="btn dg sm no-ro" data-qrm="${e._k}|${e.id}">×</button></td></tr>`).join('')}
-            <tr class="tot"><td colspan="2">수입 ${won(inc)} · 지출 ${won(exp)}</td><td class="n">${won(inc-exp)}</td><td></td>
+            <tr class="tot"><td></td><td class="nw">합계</td><td class="n out">${exp?'-':''}${won(exp)}</td><td></td>
               <td class="c no-print"></td><td class="n">${won(closing(ks[ks.length-1]))}</td><td class="no-print no-ro"></td></tr>
           </tbody></table></div>
         ${all.length?'<p class="swipe">← 표를 옆으로 밀어 보세요 →</p>':'<p class="hint" style="margin-top:10px">아직 기록이 없습니다.</p>'}
       </div>
       <div class="col" style="flex:2;min-width:280px">
-        <div class="card" style="margin:0">
-          <h2 style="font-size:14px">전체 정산</h2>
-          <div class="kv"><span>이월금</span><b>${won(open)}</b></div>
-          <div class="kv"><span class="in">수입 계</span><b class="in">${won(inc)}</b></div>
-          <div class="kv"><span class="out">지출 계</span><b class="out">-${won(exp)}</b></div>
-          <div class="kv" style="border:0"><span><b>잔고</b></span><b class="big">${won(closing(ks[ks.length-1]))}</b></div>
-        </div>
-        ${itemPanelAll()}
+        ${itemPanelAll(true)}
       </div>
     </div>
     <div class="print-only">${signBox()}</div>
   </div>`;
 }
-function itemPanelAll(){
+function itemPanelAll(first){
   const ks = P.filter(p=>!(p.k==='DEC' && authRole==='home')).map(p=>p.k);
   const sum = (cat, ex) => { const v = ks.reduce((t,k)=>t+catSum(k,cat),0); return ex? -v : v };
   const si = incOther().reduce((t,i)=>t+sum(i.name,false),0);
   const se = S.expenseItems.reduce((t,i)=>t+sum(i.name,true),0);
   const row = (arr,cls,ex)=>arr.map(it=>{ const v=sum(it.name,ex);
     return `<tr><td class="nw">${esc(it.name)}</td><td class="n ${v?cls:''}">${v?won(v):'-'}</td></tr>` }).join('');
-  return `<div class="card" style="margin-top:16px">
+  return `<div class="card" style="margin:${first?'0':'16px 0 0'}">
     <h2 style="font-size:14px">항목별 소계</h2>
     <table class="ws"><thead><tr><th class="nw" style="width:150px">수입</th><th class="n" style="width:100px">합계</th></tr></thead><tbody>
     ${row(incOther(),'in',false)}
