@@ -694,7 +694,7 @@ function setStatus(t){ const el=document.getElementById('hSt'); if(el) el.textCo
 window.addEventListener('beforeunload', e=>{ if(dirty){ e.preventDefault(); e.returnValue='' } });
 
 /* ───────── 서버(공유) 저장 ───────── */
-const APPVER = 'H2.1';
+const APPVER = 'H2.2';
 const LIBKEY = 'church_ledger_lib_v1';
 const DATASHEET = '_data', DATATAG = 'CHURCH_LEDGER_V1';
 const XLSXMIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -1176,7 +1176,7 @@ function render(){
     if(k==='plan' && tab!=='plan'){ planEdit=null; planImg=''; planDraft=null; planOpen=true }
     if(k!=='memo' && memoPending() &&
        !confirm('자료 탭에 아직 [완료]를 누르지 않은 입력이 있습니다.\n다른 탭으로 가면 사라집니다. 계속할까요?')) return;
-    if(k==='memo' && tab!=='memo'){ memoEdit=null; memoImgs=[]; memoDraft=null; memoOpen=true; pickOpen=false; pickMsg=''; loadMemos() }
+    if(k==='memo' && tab!=='memo'){ memoEdit=null; memoImgs=[]; memoDraft=null; memoOpen=true; pickMsg=''; loadMemos(); loadPick(true) }
     if(k==='ledger' && tab!=='ledger'){                 // 출납부를 열면 오늘 날짜의 분기·달로
       const t=todayPeriod();
       if(t){ per=t.k; mfil=t.m } 
@@ -1201,16 +1201,18 @@ function render(){
         S.memos[i]=Object.assign({}, S.memos[i], {text:t, etc:etc, imgs:memoImgs.slice(), img:''});
         memoAdd=memoEdit; memoEdit=null }
       else { const id=uid(); S.memos.push({id, date:todayISO(), text:t, etc:etc, imgs:memoImgs.slice(), img:''}); memoAdd=id }
-      memoImgs=[]; memoDraft=null; memoOpen=false; pickOpen=false; pickMsg='';
+      memoImgs=[]; memoDraft=null; memoOpen=false; pickMsg='';
       try{ if(document.activeElement && document.activeElement.blur) document.activeElement.blur() }catch(e){}
       save(); render();
       saveMemos().then(ok=>{ if(ok){ srvMsg='자료를 저장했습니다 · '+nowT(); render() } });
     };
     $('#moAdd').onclick=addMemo;
     ['moText','moEtc'].forEach(id=>{ const el=$('#'+id); if(el) el.onkeydown=ev=>{ if(ev.key==='Enter') addMemo() } });
-    if($('#moCancel')) $('#moCancel').onclick=()=>{ memoEdit=null; memoImgs=[]; memoDraft=null; pickOpen=false; render() };
+    if($('#moCancel')) $('#moCancel').onclick=()=>{ memoEdit=null; memoImgs=[]; memoDraft=null; render() };
     if($('#moPic')) $('#moPic').onclick=()=>$('#moPicIn').click();
-    if($('#moPick')) $('#moPick').onclick=()=>{ snapMemo(); pickOpen=true; render(); loadPick(false) };
+    if($('#moPick')) $('#moPick').onclick=()=>{ snapMemo(); loadPick(true);
+      const el=document.querySelector('[data-pick]')||document.querySelector('[data-dview]');
+      if(el){ try{ el.scrollIntoView({block:'center'}) }catch(e){} } };
     if($('#moPicCam')) $('#moPicCam').onclick=()=>$('#moPicCamIn').click();
     if($('#moPicClr')) $('#moPicClr').onclick=()=>{ snapMemo(); memoImgs=[]; render() };
     if($('#moPicPop')) $('#moPicPop').onclick=()=>{ snapMemo(); memoImgs.pop(); render() };
@@ -1241,7 +1243,11 @@ function render(){
     if($('#moPicIn')) $('#moPicIn').onchange=takeMo;
     if($('#moPicCamIn')) $('#moPicCamIn').onchange=takeMo;
   }
-  if($('#pkClose')) $('#pkClose').onclick=()=>{ pickOpen=false; pickMsg=''; render() };
+  on('[data-dview]','click',e=>{
+    const el=e.target.closest('[data-dview]'); if(!el) return;
+    const p=el.dataset.dview.split('|');
+    showImgs(['pdf|'+p[1]+'|'+p[0]], 0);
+  });
   if($('#pkRefresh')) $('#pkRefresh').onclick=()=>loadPick(true);
   on('[data-pick]','click',async e=>{
     const el=e.target.closest('[data-pick]'); if(!el) return;
@@ -1251,8 +1257,12 @@ function render(){
     try{
       await api('share', {id:id});                    // 미리보기로 볼 수 있게
       memoImgs.push('pdf|'+String(f.name).replace(/\|/g,'-')+'|'+id);
-      if(memoDraft && !String(memoDraft.text||'').trim())
-        memoDraft.text = String(f.name).replace(/\.[^.]+$/,'');
+      const cur = $('#moText') ? $('#moText').value.trim() : (memoDraft? String(memoDraft.text||'').trim() : '');
+      if(!cur){                                        // 제목이 비었으면 파일 이름으로
+        const t = String(f.name).replace(/\.[^.]+$/,'');
+        memoDraft = Object.assign({text:'', etc:''}, memoDraft||{}, {text:t});
+      } else if(memoDraft){ memoDraft.text = cur }
+      else { memoDraft = {text:cur, etc:($('#moEtc')?$('#moEtc').value:'')} }
       pickMsg=''; render();
     }catch(err){
       pickMsg=''; render();
@@ -1795,7 +1805,7 @@ async function loadPick(force){
   try{
     const j = await api('files');
     pickList = j.list || []; pickFolder = j.folder || '';
-    pickMsg = pickList.length ? '' : '';
+    pickMsg = '';
   }catch(e){
     pickList = [];
     pickMsg = '목록을 읽지 못했습니다. Code.gs를 새 버전으로 배포했는지 확인해 주세요.';
@@ -1939,7 +1949,7 @@ function showImgs(list, idx){
 
 /* ── 자료 ── */
 let memoEdit=null, memoImgs=[], memoDraft=null, memoOpen=true, memoAdd=null, moBusy='';
-let pickOpen=false, pickList=null, pickMsg='', pickFolder='';
+let pickList=null, pickMsg='', pickFolder='';
 function todayISO(){ const d=new Date();
   return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0') }
 function memoPending(){                  // 아직 [완료]를 누르지 않은 입력이 있는가
@@ -1948,23 +1958,25 @@ function memoPending(){                  // 아직 [완료]를 누르지 않은 
   return !!(memoImgs.length || (t&&t.value.trim()) || (e&&e.value.trim()));
 }
 function pickBox(){
-  if(!pickOpen) return '';
-  const rows = (pickList||[]).filter(f=>!memoImgs.some(u=>isPdfRef(u)&&pdfId(u)===f.id));
-  return `<div class="card no-print" style="margin-bottom:16px">
-    <h2>드라이브에서 고르기 ${pickFolder?`<span class="hint" style="display:inline">${esc(pickFolder)} 폴더</span>`:''}</h2>
-    <p class="hint">여기서 고른 파일은 <b>사본을 만들지 않고</b> 원본을 그대로 연결합니다.</p>
+  const rows = pickList || [];
+  return `<div class="card no-print">
+    <h2>구글 드라이브 자료 ${pickFolder?`<span class="hint" style="display:inline">${esc(pickFolder)} 폴더</span>`:''}
+      <button class="btn g sm" style="margin-left:10px;vertical-align:middle" id="pkRefresh">새로고침</button></h2>
     ${pickMsg?`<p class="lg-busy">${esc(pickMsg)}</p>`:''}
     ${pickList===null ? '' : rows.length
-      ? `<div class="vlist">${rows.map(f=>`<div class="vrow" data-pick="${esc(f.id)}">
-          <span class="pdfch" style="cursor:default">${/pdf/i.test(f.type)?'PDF':/image/i.test(f.type)?'IMG':'FILE'}</span>
-          <b class="nw" style="margin-left:8px">${esc(f.name)}</b>
-          <span class="hint" style="margin:0 0 0 auto">${(f.size/1048576).toFixed(1)}MB · ${new Date(f.at).toLocaleDateString('ko-KR')}</span>
-        </div>`).join('')}</div>`
-      : `<p class="hint">고를 수 있는 파일이 없습니다.</p>`}
-    <div class="tools" style="margin-top:12px">
-      <button class="btn g sm" id="pkRefresh">목록 새로고침</button>
-      <button class="btn g sm" id="pkClose">닫기</button>
-    </div>
+      ? `<div class="vlist">${rows.map(f=>{
+          const used = memoImgs.some(u=>isPdfRef(u)&&pdfId(u)===f.id);
+          return `<div class="vrow">
+            <span class="pdfch" style="cursor:default">${/pdf/i.test(f.type)?'PDF':/image/i.test(f.type)?'IMG':'FILE'}</span>
+            <b class="nw" style="margin-left:8px;flex:1;min-width:0;cursor:pointer" data-dview="${esc(f.id)}|${esc(f.name)}">${esc(f.name)}</b>
+            <span class="hint" style="margin:0 10px 0 0;flex:none">${(f.size/1048576).toFixed(1)}MB</span>
+            <button class="btn g sm" style="flex:none" data-dview="${esc(f.id)}|${esc(f.name)}">보기</button>
+            <span class="no-ro" style="flex:none">${used
+              ? `<span class="badge b-ok" style="margin-left:5px">붙임</span>`
+              : `<button class="btn sm" style="margin-left:5px" data-pick="${esc(f.id)}">붙이기</button>`}</span>
+          </div>`}).join('')}</div>`
+      : `<p class="hint">폴더에 파일이 없습니다.</p>`}
+    <p class="hint" style="margin:10px 0 0">파일 이름이나 <b>보기</b>를 누르면 내용을 봅니다. <b>붙이기</b>를 누르면 아래 자료에 사본 없이 연결됩니다.</p>
   </div>`;
 }
 function vMemo(){
@@ -2985,7 +2997,7 @@ function tryLogin(){
 }
 function enterApp(){
   locked = (authRole==='home');            // 가계부는 열람으로 시작
-  if(authRole==='home') setTimeout(loadMemos, 0);
+  if(authRole==='home') setTimeout(()=>{ loadMemos(); loadPick(true) }, 0);
   screen='app'; tab=(authRole==='home'?'settle':'guide'); per='Q1'; editId=null; srvMsg=''; mine=null;
   save(); render(); window.scrollTo(0,0);
 }
