@@ -680,7 +680,7 @@ function save(){
   dirty=true; setStatus('저장 중…');
   clearTimeout(saveT);
   saveT = setTimeout(async()=>{
-    try{ await store.set(KEY, JSON.stringify(S)); dirty=false; setStatus('임시 보관됨 · '+nowT()); prepShare() }
+    try{ await store.set(KEY, JSON.stringify(S)); dirty=false; setStatus('임시 보관됨 · '+nowT()); prepShare(); offloadSoon() }
     catch(e){
       setStatus('⚠ 임시 보관 실패');
       if(!quotaWarned){ quotaWarned=true;
@@ -694,7 +694,7 @@ function setStatus(t){ const el=document.getElementById('hSt'); if(el) el.textCo
 window.addEventListener('beforeunload', e=>{ if(dirty){ e.preventDefault(); e.returnValue='' } });
 
 /* ───────── 서버(공유) 저장 ───────── */
-const APPVER = 'H2.2';
+const APPVER = 'H2.3';
 const LIBKEY = 'church_ledger_lib_v1';
 const DATASHEET = '_data', DATATAG = 'CHURCH_LEDGER_V1';
 const XLSXMIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -853,18 +853,42 @@ function sources(){
 }
 
 /* ── 서버 통신 (구글 앱스 스크립트) ── */
-async function api(action, body){
+let lastApi = 0;                                    // 마지막으로 서버와 이야기한 때
+const RETRY_OK = {get:1, list:1, files:1, ping:1, save:1};   // 다시 보내도 안전한 요청
+async function api(action, body, opt){
   if(!serverOn()) throw new Error('서버 주소가 설정되지 않았습니다');
-  const r = await fetch(serverUrl(), {
-    method:'POST',
-    headers:{'Content-Type':'text/plain;charset=utf-8'},   // 이렇게 해야 사전 요청 없이 통한다
-    body: JSON.stringify(Object.assign({key:serverKey(), action:action}, body||{}))
-  });
-  let j;
-  try{ j = await r.json() }catch(e){ throw new Error('서버 응답을 읽을 수 없습니다') }
-  if(!j.ok) throw new Error(j.error||'서버 오류');
-  return j;
+  opt = opt || {};
+  const wait = opt.timeout || (action==='upfile' ? 120000 : 45000);
+  const text = JSON.stringify(Object.assign({key:serverKey(), action:action}, body||{}));
+  let tries = RETRY_OK[action] ? 2 : 1, err = null;
+  for(let t=0; t<tries; t++){
+    const ac = window.AbortController ? new AbortController() : null;
+    const tm = ac ? setTimeout(()=>ac.abort(), wait) : null;
+    try{
+      const r = await fetch(serverUrl(), {
+        method:'POST',
+        headers:{'Content-Type':'text/plain;charset=utf-8'},   // 이렇게 해야 사전 요청 없이 통한다
+        body: text, signal: ac ? ac.signal : undefined
+      });
+      let j;
+      try{ j = await r.json() }catch(e){ throw new Error('서버 응답을 읽을 수 없습니다') }
+      lastApi = Date.now();
+      if(!j.ok){ const e2=new Error(j.error||'서버 오류'); e2.srv=true; throw e2 }
+      return j;
+    }catch(e){
+      err = (e && e.name==='AbortError') ? new Error('서버 응답이 너무 늦습니다 ('+Math.round(wait/1000)+'초)') : e;
+      if(e && e.srv) break;                          // 서버가 거절한 것은 다시 보내지 않는다
+      if(t+1<tries) await new Promise(r=>setTimeout(r, 1500));
+    }finally{ if(tm) clearTimeout(tm) }
+  }
+  throw err;
 }
+function warmUp(){                                  // 오래 쉬었으면 서버를 미리 깨워 둔다
+  if(!serverOn() || Date.now()-lastApi < 4*60000) return;
+  lastApi = Date.now();
+  api('ping').catch(()=>{});
+}
+document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible') warmUp() });
 const USERKEY='_users', CACHEKEY='church_ledger_cache_v1', FILEKEY='church_ledger_file_';
 let memoLoaded=false, memoBusy=false;
 function memoKey(){ return '_memo_' + deptName() }
@@ -878,10 +902,20 @@ async function loadMemos(){                        // 자료는 따로 보관하
   }catch(e){}                                      // 아직 없으면 그대로 둔다
   memoLoaded=true; memoBusy=false; render();
 }
-async function saveMemos(){                        // 자료를 고칠 때마다 곧바로 저장
+let memoRun=null, memoAgain=false;
+async function saveMemos(){                        // 자료를 고칠 때마다 곧바로 저장 — 겹치지 않게 차례로
   if(!serverOn() || !deptName()) return false;
-  try{ await api('save', {name:memoKey(), year:S.meta.year, data:{memos:S.memos||[]}}); return true }
-  catch(e){ alert('자료를 저장하지 못했습니다.\n\n'+(e&&e.message?e.message:e)); return false }
+  if(memoRun){ memoAgain=true; return memoRun }
+  memoRun = (async()=>{
+    let ok=true;
+    do{
+      memoAgain=false;
+      try{ await api('save', {name:memoKey(), year:S.meta.year, data:{memos:S.memos||[]}}) }
+      catch(e){ ok=false; alert('자료를 저장하지 못했습니다.\n\n'+(e&&e.message?e.message:e)); break }
+    }while(memoAgain);
+    return ok;
+  })();
+  try{ return await memoRun }finally{ memoRun=null }
 }
 let preKey='', prePromise=null;                    // 미리 받아오는 중인 파일
 let listFresh=false;                               // 목록을 서버에서 새로 받았는가
@@ -969,14 +1003,30 @@ async function srvSave(silent){
   if(ro){ alert('열람 중인 다른 부서 자료는 저장할 수 없습니다.'); return false }
   if(!serverOn()){ if(!silent) alert('서버 주소가 설정되지 않았습니다.\n데이터 탭에서 주소를 넣어 주세요.'); return false }
   if(!deptName()){ alert('안내 탭 기본 정보에 작성 부서명을 먼저 입력하세요.'); return false }
-  setStatus('서버에 저장 중…');
+  if(srvBusy){ setStatus('저장 중입니다… 잠시만요'); return false }   // 두 번 눌러도 한 번만
+  srvBusy=true; setStatus('서버에 저장 중…'); markSaveBtn();
   try{
     const light = Object.assign({}, S); delete light.memos;   // 자료는 따로 보관한다
-    await api('save', {name:deptName(), year:S.meta.year, data:light});
-
-    // 서버에 제대로 들어갔는지 다시 읽어 확인한다
     const mine = countAll(light);
+    const sj = await api('save', {name:deptName(), year:S.meta.year, data:light});
+
     let back=null;
+    if(typeof sj.n === 'number'){                   // 새 서버 — 받은 건수와 기록한 크기를 서버가 확인해 준다
+      if(sj.n !== mine){
+        setStatus('⚠ 저장 확인 실패');
+        alert(`서버가 받은 자료 수가 다릅니다.\n보낸 자료: ${mine}건 / 서버: ${sj.n}건\n\n다시 [저장]을 눌러 주세요.`);
+        render(); return false;
+      }
+      back = {name:deptName(), year:S.meta.year, at:sj.at, data:light};
+      const k=deptName()+'|'+S.meta.year, x=(deptList||[]).find(d=>d.name+'|'+d.year===k);
+      if(x) x.at=sj.mt; else deptList.push({name:deptName(), year:S.meta.year, at:sj.mt});
+      saveCache();
+      try{ await store.set(FILEKEY+k, JSON.stringify({at:sj.mt, rec:back})) }catch(e){}
+      srvMsg = `${S.meta.year}년 ${deptName()} 자료를 서버에 저장했습니다 (${mine}건 확인) · ${nowT()}`;
+      setStatus('서버 저장됨 · '+nowT()); render(); return true;
+    }
+
+    // 예전 서버 — 다시 읽어 확인한다
     try{ const j = await api('get', {name:deptName(), year:S.meta.year}); back = j.rec }catch(e){}
     if(!back || countAll(back.data) !== mine){
       setStatus('⚠ 저장 확인 실패');
@@ -998,7 +1048,12 @@ async function srvSave(silent){
     setStatus('⚠ 서버 저장 실패');
     alert('서버에 저장하지 못했습니다.\n\n'+(e&&e.message?e.message:e)+'\n\n[엑셀] 버튼으로 파일을 만들어 두세요.');
     return false;
-  }
+  }finally{ srvBusy=false; markSaveBtn() }
+}
+let srvBusy=false;
+function markSaveBtn(){
+  const b=document.getElementById('navSave'); if(!b) return;
+  b.disabled=srvBusy; b.textContent = srvBusy? '저장 중…' : '저장';
 }
 async function srvLoad(){
   if(!serverOn()){ alert('서버 주소가 설정되지 않았습니다.'); return }
@@ -1152,7 +1207,7 @@ function render(){
   document.getElementById('hSave').innerHTML =
     ((authRole==='home' && !ro)
       ? `<button id="navLock" class="nsave ${locked?'alt':''}">${locked?'열람':'작성'}</button>` : '')
-    + ((ro||guideMode==='view') ? '' : '<button id="navSave" class="nsave">저장</button>')
+    + ((ro||guideMode==='view') ? '' : (srvBusy?'<button id="navSave" class="nsave" disabled>저장 중…</button>':'<button id="navSave" class="nsave">저장</button>'))
     + '<button id="navExit" class="nsave alt">종료</button>';
 
   const upd = newVer ? `<div class="robar no-print" style="background:#e8f0ed;border-color:#cfe6da;color:#26493f">
@@ -1331,6 +1386,7 @@ function render(){
     S.plan=(S.plan||[]).filter(x=>x.id!==e.target.dataset.prm);
     if(planEdit===e.target.dataset.prm) planEdit=null; save(); render() });
   on('[data-pimg]','click',e=>{ const t=(S.plan||[]).find(x=>x.id===e.target.dataset.pimg); if(t&&t.img) showImg(t.img) });
+  if($('#offNow')) $('#offNow').onclick=()=>{ offMsg='사진을 옮기는 중입니다…'; const p=offload(); render(); p.then(()=>{ if(!offMsg.includes('옮겼')) offMsg=''; render() }) };
   const nsv = document.getElementById('navSave');
   if(nsv) nsv.onclick = ()=>{
     if(memoPending() && !confirm('자료 탭에 아직 [완료]를 누르지 않은 입력이 있습니다.\n그대로 저장할까요?\n\n(자료를 남기려면 취소하고 [완료]를 먼저 누르세요.)')) return;
@@ -1834,12 +1890,50 @@ async function uploadPdf(file, cb){                 // 드라이브에 올리고
   fr.onerror = function(){ alert('문서를 읽을 수 없습니다.'); cb(null) };
   fr.readAsDataURL(file);
 }
-function imgStats(){
-  let n=0, b=0;
-  P.forEach(p=>ents(p.k).forEach(e=>{ if(e.img){ n++; b+=e.img.length } }));
-  (S.plan||[]).forEach(e=>{ if(e.img){ n++; b+=e.img.length } });
-  (S.memos||[]).forEach(e=>(e.imgs||[]).forEach(u=>{ if(isPdfRef(u)) return; n++; b+=u.length }));
-  return {n:n, mb:(b/1048576)};
+function isData(u){ return /^data:image\//.test(String(u||'')) }
+function imgStats(){                                 // n: 모든 사진, left: 아직 장부 안에 든 사진
+  let n=0, b=0, left=0;
+  const add=u=>{ if(!u || isPdfRef(u)) return; n++; if(isData(u)){ left++; b+=u.length } };
+  P.forEach(p=>ents(p.k).forEach(e=>add(e.img)));
+  (S.plan||[]).forEach(e=>add(e.img));
+  (S.memos||[]).forEach(e=>(e.imgs||[]).forEach(add));
+  return {n:n, left:left, mb:(b/1048576)};
+}
+
+/* ── 사진을 드라이브로 옮기기 ──
+   첨부한 사진은 먼저 장부 안에 두었다가, 뒤에서 드라이브 교회회계자료 › 사진 폴더로 올리고
+   장부에는 주소만 남긴다. 인터넷이 끊기면 그대로 두었다가 다음에 다시 옮긴다. */
+const PHOTO_URL = id => 'https://drive.google.com/thumbnail?id='+id+'&sz=w2000';
+let offRun=false, offT=null, offMsg='';
+function offloadSoon(ms){ clearTimeout(offT); offT=setTimeout(offload, ms==null?1500:ms) }
+async function offload(){
+  if(offRun || ro || locked || !serverOn() || !deptName()) return;
+  offRun=true;
+  let moved=0, memoMoved=false;
+  try{
+    for(;;){
+      if(ro || locked) break;
+      let u='';                                          // 옮길 사진 하나 찾기
+      P.forEach(p=>ents(p.k).forEach(e=>{ if(!u && isData(e.img)) u=e.img }));
+      (S.plan||[]).forEach(e=>{ if(!u && isData(e.img)) u=e.img });
+      if(!u && memoLoaded) (S.memos||[]).forEach(e=>(e.imgs||[]).forEach(x=>{ if(!u && isData(x)) u=x }));
+      if(!u) break;
+      const nm = deptName()+'_'+new Date().toISOString().slice(0,10).replace(/-/g,'')+'_'+uid()+'.jpg';
+      let j;
+      try{ j = await api('upfile', {name:nm, data:u, sub:'img'}) }catch(e){ break }   // 다음에 다시
+      const url = PHOTO_URL(j.id);
+      P.forEach(p=>ents(p.k).forEach(e=>{ if(e.img===u) e.img=url }));   // 같은 사진은 모두 바꾼다
+      (S.plan||[]).forEach(e=>{ if(e.img===u) e.img=url });
+      (S.memos||[]).forEach(e=>{ if((e.imgs||[]).indexOf(u)>=0){ e.imgs=e.imgs.map(x=>x===u?url:x); memoMoved=true } });
+      if(formImg===u) formImg=url;
+      if(planImg===u) planImg=url;
+      memoImgs = memoImgs.map(x=>x===u?url:x);
+      moved++;
+      save();
+    }
+  }finally{ offRun=false }
+  if(memoMoved) await saveMemos();
+  if(moved){ offMsg = `사진 ${moved}장을 드라이브로 옮겼습니다 · ${nowT()}`; if(tab==='data') render() }
 }
 function showImg(src){ showImgs([src], 0) }
 function showImgs(list, idx){
@@ -2719,11 +2813,13 @@ function vData(){
   <div class="card">
     <h2>증빙 사진</h2>
     <div class="kv"><span>첨부된 사진</span><b>${imgStats().n}장</b></div>
-    <div class="kv" style="border:0"><span>차지하는 용량</span><b>${imgStats().mb.toFixed(1)}MB ${imgStats().mb>3?'<span class="badge b-no">주의</span>':imgStats().mb>2?'<span class="badge b-w">확인</span>':''}</b></div>
+    <div class="kv"><span>드라이브로 옮긴 사진</span><b>${imgStats().n-imgStats().left}장</b></div>
+    <div class="kv" style="border:0"><span>장부 안에 남은 사진</span><b>${imgStats().left}장 · ${imgStats().mb.toFixed(1)}MB ${imgStats().mb>3?'<span class="badge b-no">주의</span>':imgStats().mb>1?'<span class="badge b-w">확인</span>':''}</b></div>
+    ${imgStats().left && serverOn() && !ro ? `<button class="btn" id="offNow" style="margin-top:10px" ${offRun?'disabled':''}>${offRun?'옮기는 중…':'남은 사진 지금 드라이브로 옮기기'}</button>`:''}
+    ${offMsg?`<p class="hint">${offMsg}</p>`:''}
     <div class="note ${imgStats().mb>2?'w':''}" style="margin-top:12px">
-      사진은 첨부할 때 자동으로 줄여 한 장에 0.2MB 안팎이 됩니다.
-      기기에 임시 보관할 수 있는 양이 <b>약 4MB</b>라, 사진이 많아지면 저장이 안 될 수 있습니다.
-      분기가 끝나면 <b>엑셀로 저장</b>해 두고 오래된 사진은 지우시면 안전합니다.
+      사진은 첨부하면 뒤에서 자동으로 드라이브 <b>교회회계자료 › 사진</b> 폴더에 올라가고, 장부에는 주소만 남습니다.
+      그래서 장부 파일이 가벼워져 [저장]이 빨라집니다. 인터넷이 끊겼을 때 찍은 사진은 장부 안에 두었다가 다음 연결 때 옮깁니다.
     </div>
   </div>
 
@@ -3546,5 +3642,14 @@ function readOldExcel(wb){
   cvBusy=false; render();
   checkUpdate(false);
   loadXLSX().then(prepShare).catch(function(){});   // 저장·공유가 바로 되도록 미리 준비
+  offloadSoon(8000);                                 // 장부 안에 남은 사진이 있으면 천천히 옮긴다
 })();
+/* 드라이브 사진 주소가 막히면 다른 주소로 한 번 더 시도한다 */
+document.addEventListener('error', function(ev){
+  const el=ev.target;
+  if(!el || el.tagName!=='IMG' || el.dataset.alt) return;
+  const m=String(el.src||'').match(/drive\.google\.com\/thumbnail\?id=([^&]+)/);
+  if(!m) return;
+  el.dataset.alt='1'; el.src='https://lh3.googleusercontent.com/d/'+m[1]+'=w2000';
+}, true);
 </script>
