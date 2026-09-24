@@ -694,7 +694,7 @@ function setStatus(t){ const el=document.getElementById('hSt'); if(el) el.textCo
 window.addEventListener('beforeunload', e=>{ if(dirty){ e.preventDefault(); e.returnValue='' } });
 
 /* ───────── 서버(공유) 저장 ───────── */
-const APPVER = 'H2.4';
+const APPVER = 'H2.5';
 const LIBKEY = 'church_ledger_lib_v1';
 const DATASHEET = '_data', DATATAG = 'CHURCH_LEDGER_V1';
 const XLSXMIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -1771,7 +1771,25 @@ function vGuide(){
 }
 
 /* ── 예산 ── */
+/* 예비비 — 수입 계와 지출 계가 같도록 늘 자동으로 채운다 */
+function reserveIdx(){ return S.expenseItems.findIndex(it=>/예비비/.test(it.name||'')) }
+function balanceReserve(){                           // 값이 바뀌었으면 true
+  if(ro || locked) return false;
+  let r = reserveIdx(), changed=false;
+  if(r<0){                                           // 없으면 맨 끝에 번호를 이어 붙여 만든다
+    const nos = S.expenseItems.map(it=>parseInt(String(it.name||''),10)).filter(n=>!isNaN(n));
+    const nm = (nos.length? (Math.max.apply(null,nos)+1)+'.' : '') + '예비비';
+    S.expenseItems.push({name:nm, budget:0, basis:'자동 계산'}); r=S.expenseItems.length-1; changed=true;
+  }
+  const incT = S.incomeItems.reduce((t,i)=>t+(+i.budget||0),0);
+  const others = S.expenseItems.reduce((t,it,i)=>i===r? t : t+(+it.budget||0),0);
+  const v = incT - others;
+  if(S.expenseItems[r].budget!==v){ S.expenseItems[r].budget=v; changed=true }
+  return changed;
+}
 function vBudget(){
+  if(balanceReserve()) save();
+  const rIdx=reserveIdx();
   const incT=S.incomeItems.reduce((s,i)=>s+i.budget,0), expT=S.expenseItems.reduce((s,i)=>s+i.budget,0);
   return `
   ${pHead(`${S.meta.year}년 ${S.meta.dept} 운영계획`, `회계기간 ${PERIOD(S.meta.year)} · (1월 1일 기준)`)}
@@ -1794,7 +1812,11 @@ function vBudget(){
       <h2>지출 계획</h2>
       <p class="hint">항목 앞에 번호를 붙이면(예: 1.겨울성경학교) 정렬이 쉽습니다.</p>
       <table class="wb"><thead><tr><th style="width:120px">항목</th><th class="n" style="width:100px">지출액</th><th style="width:150px">산출근거</th><th style="width:34px"></th></tr></thead><tbody>
-      ${S.expenseItems.map((it,i)=>`<tr>
+      ${S.expenseItems.map((it,i)=> i===rIdx ? `<tr style="background:var(--soft,#f6f7f9)">
+        <td><input type="text" value="${esc(it.name)}" readonly title="수입 계에 맞춰 자동으로 채워집니다"></td>
+        <td class="n"><input type="text" class="n ${it.budget<0?'out':''}" value="${won(it.budget)}" readonly tabindex="-1" title="수입 계 − 다른 지출 항목 합계"></td>
+        <td><input type="text" data-be="${i}" data-f="basis" value="${esc(it.basis)}"></td>
+        <td class="c"><span class="badge b-ok" title="자동 계산">자동</span></td></tr>` : `<tr>
         <td><input type="text" data-be="${i}" data-f="name" value="${esc(it.name)}"></td>
         <td class="n"><input type="text" class="n" data-be="${i}" data-f="budget" value="${won(it.budget)}"></td>
         <td><input type="text" data-be="${i}" data-f="basis" value="${esc(it.basis)}"></td>
@@ -1802,6 +1824,7 @@ function vBudget(){
       <tr class="tot"><td>계</td><td class="n">${won(expT)}</td><td colspan="2"></td></tr>
       </tbody></table>
       <button class="btn g sm no-ro" style="margin-top:10px" data-add-exp>+ 지출 항목 추가</button>
+      ${rIdx>=0 && S.expenseItems[rIdx].budget<0 ? `<p class="hint out" style="margin-top:8px">⚠ 지출 계획이 수입보다 ${won(-S.expenseItems[rIdx].budget)}원 많아 예비비가 마이너스입니다. 다른 지출 항목을 줄여 주세요.</p>` : `<p class="hint" style="margin-top:8px"><b>예비비</b>는 수입 계에서 다른 지출 항목을 뺀 금액으로 자동 계산됩니다.</p>`}
     </div>
   </div>
   <div class="card" style="display:flex;align-items:center;gap:14px">
@@ -3108,20 +3131,20 @@ function bind(){
   on('[data-bi]','change',e=>{ const i=+e.target.dataset.bi,f=e.target.dataset.f;
     if(f==='budget') S.incomeItems[i].budget=num(e.target.value);
     else { const old=S.incomeItems[i].name, nv=e.target.value.trim(); renameCat(old,nv); S.incomeItems[i].name=nv }
-    save(); render() });
+    balanceReserve(); save(); render() });
   on('[data-be]','change',e=>{ const i=+e.target.dataset.be,f=e.target.dataset.f;
     if(f==='budget') S.expenseItems[i].budget=num(e.target.value);
     else if(f==='basis') S.expenseItems[i].basis=e.target.value;
     else { const old=S.expenseItems[i].name, nv=e.target.value.trim(); renameCat(old,nv); S.expenseItems[i].name=nv }
-    save(); render() });
+    balanceReserve(); save(); render() });
   on('[data-add-inc]','click',()=>{ S.incomeItems.push({name:'새 수입항목',budget:0}); save(); render() });
-  on('[data-add-exp]','click',()=>{ S.expenseItems.push({name:(S.expenseItems.length+1)+'.새 지출항목',budget:0,basis:''}); save(); render() });
+  on('[data-add-exp]','click',()=>{ S.expenseItems.push({name:(S.expenseItems.length+1)+'.새 지출항목',budget:0,basis:''}); balanceReserve(); save(); render() });
   on('[data-del-inc]','click',e=>{ const i=+e.target.dataset.delInc;
     if(used(S.incomeItems[i].name) && !confirm('이 항목으로 기록된 거래가 있습니다. 그래도 삭제할까요?')) return;
-    S.incomeItems.splice(i,1); save(); render() });
+    S.incomeItems.splice(i,1); balanceReserve(); save(); render() });
   on('[data-del-exp]','click',e=>{ const i=+e.target.dataset.delExp;
     if(used(S.expenseItems[i].name) && !confirm('이 항목으로 기록된 거래가 있습니다. 그래도 삭제할까요?')) return;
-    S.expenseItems.splice(i,1); save(); render() });
+    S.expenseItems.splice(i,1); balanceReserve(); save(); render() });
 
   on('[data-per]','click',e=>{
     per=e.target.dataset.per; mfil=0; editId=null; formImg=''; draft=null; formOpen=true;
