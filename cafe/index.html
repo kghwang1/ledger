@@ -694,7 +694,7 @@ function setStatus(t){ const el=document.getElementById('hSt'); if(el) el.textCo
 window.addEventListener('beforeunload', e=>{ if(dirty){ e.preventDefault(); e.returnValue='' } });
 
 /* ───────── 서버(공유) 저장 ───────── */
-const APPVER = 'H2.5';
+const APPVER = 'H2.6';
 const LIBKEY = 'church_ledger_lib_v1';
 const DATASHEET = '_data', DATATAG = 'CHURCH_LEDGER_V1';
 const XLSXMIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -2628,7 +2628,18 @@ function defDate(p){
 
 /* ── 결산 ── */
 function vSettle(){
+  if(balanceReserve()) save();                       // 예비비 예산을 먼저 맞춘다
   const s = settle();
+  /* 지출 결산의 예비비 = 수입 합계 − (가결산) − 다른 지출 합계 → 지출 소계가 수입과 같아진다 */
+  const rI = reserveIdx();
+  const xs = s.exp.map(x=>Object.assign({}, x));
+  let rReal = 0;
+  if(rI>=0){
+    rReal = xs[rI].actual;                           // 예비비로 실제 쓴 돈
+    const others = xs.reduce((t,x,i)=>i===rI? t : t+x.actual, 0);
+    xs[rI].actual = s.incT - s.dec - others;
+  }
+  const xsT = xs.reduce((t,x)=>t+x.actual,0);
   const ok1 = s.dec === s.q4, ok2 = s.incT === s.expT + s.dec;
   return `
   <div class="card">
@@ -2651,9 +2662,9 @@ function vSettle(){
       <div class="col">
         <h2 style="font-size:14px">지출 결산</h2>
         <table class="we"><thead><tr><th style="width:110px">항목</th><th class="n">예산</th><th class="n">지출</th><th class="n">${authRole==='home'?'잔고':'증감'}</th></tr></thead><tbody>
-        ${s.exp.map(x=>`<tr><td>${esc(x.name)}</td><td class="n">${won(x.budget)}</td><td class="n">${won(x.actual)}</td>
+        ${xs.map((x,i)=>`<tr${i===rI?' style="background:var(--soft,#f6f7f9)"':''}><td>${esc(x.name)}${i===rI?` <span class="hint" style="display:inline" title="예비비 실제 지출 ${won(rReal)}원 + 남은 잔고">(잔고 포함)</span>`:''}</td><td class="n">${won(x.budget)}</td><td class="n ${x.actual<0?'out':''}">${won(x.actual)}</td>
           <td class="n ${x.actual-x.budget>0?'out':''}">${won(x.actual-x.budget)}</td></tr>`).join('')}
-        <tr class="tot"><td>소계</td><td class="n">${won(s.expB)}</td><td class="n">${won(s.expT)}</td><td class="n">${won(s.expT-s.expB)}</td></tr>
+        <tr class="tot"><td>소계</td><td class="n">${won(s.expB)}</td><td class="n">${won(xsT)}</td><td class="n">${won(xsT-s.expB)}</td></tr>
         </tbody></table>
       </div>
     </div>
@@ -2663,7 +2674,7 @@ function vSettle(){
     <div class="col card">
       <h2>${S.meta.year}년 결산</h2>
       <div class="kv"><span>수입 합계</span><b class="in">${won(s.incT)}</b></div>
-      <div class="kv"><span>지출 합계</span><b class="out">${won(s.expT)}</b></div>
+      <div class="kv"><span>지출 합계 <span class="hint" style="display:inline">(실제 지출)</span></span><b class="out">${won(s.expT)}</b></div>
       ${authRole==='home'?'':`<div class="kv"><span>12월 가결산 <span class="hint" style="display:inline">(12월 지출 예상액)</span></span><b>${won(s.dec)}</b></div>`}
       <div class="kv" style="border:0"><span><b>${authRole==='home'?'남은 잔고':S.meta.year+'년 잔고'}</b></span><b class="big">${won(s.incT-s.expT-s.dec)}</b></div>
       ${authRole==='home'?'':`<p class="hint" style="margin-top:10px">11월 말 남은 잔고 전액을 12월 예상 지출(가결산)로 처리하여 ${S.meta.year}년 잔고를 0으로 맞춥니다. 이 12월분은 실제 집행 후 ${S.meta.year+1}년에 별도로 정산·보고합니다.</p>`}
