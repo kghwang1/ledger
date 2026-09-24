@@ -694,7 +694,7 @@ function setStatus(t){ const el=document.getElementById('hSt'); if(el) el.textCo
 window.addEventListener('beforeunload', e=>{ if(dirty){ e.preventDefault(); e.returnValue='' } });
 
 /* ───────── 서버(공유) 저장 ───────── */
-const APPVER = 'H2.6';
+const APPVER = 'H2.7';
 const LIBKEY = 'church_ledger_lib_v1';
 const DATASHEET = '_data', DATATAG = 'CHURCH_LEDGER_V1';
 const XLSXMIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -1190,10 +1190,16 @@ function render(){
   if(tab==='next' && authRole==='home') tab='guide';
   if(tab==='memo' && authRole!=='home') tab='guide';
   if(tab==='guide' && authRole==='home') tab='settle';
-  document.getElementById('hTitle').textContent = ro
+  if(balanceReserve()) save();                       // 예비비는 늘 수입 계에 맞춰 둔다 (잠금 중이면 화면에만)
+  const hT=document.getElementById('hTitle');
+  hT.textContent = ro
     ? `${S.meta.year}년 ${roName} 자료열람`
     : (authRole==='home' ? `${S.meta.dept||''} 회계장부`
                          : `${S.meta.year}년 ${S.meta.dept||'부서'} 회계장부`);
+  const vb=document.createElement('span');             // 제목 옆 버전 표시
+  vb.textContent='v'+APPVER;
+  vb.style.cssText='font-size:11px;font-weight:500;opacity:.6;margin-left:8px;vertical-align:middle;letter-spacing:0';
+  hT.appendChild(vb);
   document.getElementById('hSub').textContent = (authRole==='home') ? '' : (S.meta.church || '');
   document.body.classList.toggle('viewing', !!(ro || guideMode==='view'));
 
@@ -1774,7 +1780,7 @@ function vGuide(){
 /* 예비비 — 수입 계와 지출 계가 같도록 늘 자동으로 채운다 */
 function reserveIdx(){ return S.expenseItems.findIndex(it=>/예비비/.test(it.name||'')) }
 function balanceReserve(){                           // 값이 바뀌었으면 true
-  if(ro || locked) return false;
+  if(!S || !Array.isArray(S.expenseItems) || !Array.isArray(S.incomeItems)) return false;
   let r = reserveIdx(), changed=false;
   if(r<0){                                           // 없으면 맨 끝에 번호를 이어 붙여 만든다
     const nos = S.expenseItems.map(it=>parseInt(String(it.name||''),10)).filter(n=>!isNaN(n));
