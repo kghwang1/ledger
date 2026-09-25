@@ -696,7 +696,7 @@ function setStatus(t){ const el=document.getElementById('hSt'); if(el) el.textCo
 window.addEventListener('beforeunload', e=>{ if(dirty){ e.preventDefault(); e.returnValue='' } });
 
 /* ───────── 서버(공유) 저장 ───────── */
-const APPVER = 'H3.4';
+const APPVER = 'H3.5';
 const LIBKEY = 'church_ledger_lib_v1';
 const DATASHEET = '_data', DATATAG = 'CHURCH_LEDGER_V1';
 const XLSXMIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -937,8 +937,42 @@ async function getRec(key){
   return j.rec;
 }
 function prefetch(key){                            // 고르는 순간 뒤에서 미리 받아 둔다
-  if(!key || !listFresh || preKey===key) return;   // 목록이 낡았으면 기다린다
-  preKey=key; prePromise=getRec(key).catch(()=>null);
+  if(!key || preKey===key) return;
+  preKey=key;
+  prePromise = listFresh ? getRec(key).catch(()=>null)
+    : api('get',{name:key.split('|')[0], year:Number(key.split('|')[1])}).then(j=>j.rec).catch(()=>null);
+}
+/* 가계부 — 가장 최근 파일을 미리 골라 두고 곧바로 받아 둔다 */
+function autoPick(){
+  if(screen!=='cover' || authRole!=='home' || selFile) return;
+  const dp = authDept || (typeof defHome==='function' ? defHome() : '');
+  const mine = deptList.filter(x=>x.name===dp).sort((a,b)=>b.year-a.year);
+  if(!mine.length) return;
+  authDept = dp; selFile = mine[0].name+'|'+mine[0].year; prefetch(selFile);
+}
+/* 기기에 남아 있는 장부를 바로 쓰고, 서버 것이 더 새것이면 뒤에서 바꿔 넣는다 */
+let verifying=false;
+async function localRec(key){
+  try{ const t=await store.get(FILEKEY+key); if(t){ const c=JSON.parse(t); if(c && c.rec && c.rec.data) return c } }catch(e){}
+  return null;
+}
+async function verifyOpen(key, localAt){
+  verifying=true;
+  try{
+    if(!listFresh) await loadDeptList();
+    if(listFresh && localAt && localAt===fileAt(key)) return;   // 기기 것이 최신
+    const rec = (preKey===key && prePromise) ? await prePromise : null;
+    const r = rec || (await api('get',{name:key.split('|')[0], year:Number(key.split('|')[1])})).rec;
+    if(!r || !r.data) return;
+    try{ await store.set(FILEKEY+key, JSON.stringify({at:fileAt(key), rec:r})) }catch(e){}
+    if(curFile!==key.replace('|','_') || screen!=='app') return;
+    if(dirty && !confirm('서버에 더 새로운 자료가 있습니다. 서버 자료로 바꿀까요?\n(지금 고친 내용은 사라집니다)')) return;
+    const keepTab=tab;
+    S=norm(r.data); S.meta.dept=key.split('|')[0]; S.meta.year=Number(key.split('|')[1])||S.meta.year;
+    try{ await store.set(KEY, JSON.stringify(S)) }catch(e){}
+    dirty=false; tab=keepTab; srvMsg='서버의 최신 자료로 바꿨습니다 · '+nowT(); render();
+  }catch(e){}
+  finally{ verifying=false; if(screen==='app') render() }
 }
 async function saveCache(){
   try{ await store.set(CACHEKEY, JSON.stringify({depts:deptList, users:users, deptNames:depts, noView:noView, homes:homes, homePw:homePw, at:Date.now()})) }catch(e){}
@@ -955,6 +989,25 @@ async function loadCache(){
     if(typeof c.homePw==='string') homePw = c.homePw;
     return !!(c.depts && c.depts.length);
   }catch(e){ return false }
+}
+function applyUsers(rec){
+  const d=(rec&&rec.data)||{};
+  users = d.list||[];
+  if(Array.isArray(d.depts) && d.depts.length) depts = d.depts.slice();
+  if(Array.isArray(d.noView)) noView = d.noView.slice();
+  if(Array.isArray(d.homes) && d.homes.length) homes = d.homes.slice();
+  if(typeof d.homePw === 'string') homePw = d.homePw;
+}
+/* 첫 화면 — 목록과 사용자 명단을 한 번에 받는다 (예전 서버면 두 번) */
+async function loadBoot(){
+  if(!serverOn()){ deptList=[]; users=[]; return }
+  try{
+    const j = await api('boot', {users:USERKEY});
+    deptList = (j.list||[]).filter(x=>String(x.name).charAt(0)!=='_'); listFresh=true;
+    if(j.users) applyUsers(j.users); else users=[];
+  }catch(e){
+    await Promise.all([loadDeptList(), loadUsers()]);
+  }
 }
 async function loadUsers(){
   if(!serverOn()){ users=[]; return }
@@ -1005,7 +1058,8 @@ async function srvSave(silent){
   if(ro){ alert('열람 중인 다른 부서 자료는 저장할 수 없습니다.'); return false }
   if(!serverOn()){ if(!silent) alert('서버 주소가 설정되지 않았습니다.\n데이터 탭에서 주소를 넣어 주세요.'); return false }
   if(!deptName()){ alert('안내 탭 기본 정보에 작성 부서명을 먼저 입력하세요.'); return false }
-  if(srvBusy){ setStatus('저장 중입니다… 잠시만요'); return false }   // 두 번 눌러도 한 번만
+  if(srvBusy){ setStatus('저장 중입니다… 잠시만요'); return false }
+  if(verifying){ alert('서버의 최신 자료를 확인하는 중입니다. 잠시 뒤 다시 눌러 주세요.'); return false }   // 두 번 눌러도 한 번만
   srvBusy=true; setStatus('서버에 저장 중…'); markSaveBtn();
   try{
     const light = Object.assign({}, S); delete light.memos;   // 자료는 따로 보관한다
@@ -2073,7 +2127,7 @@ const PHOTO_URL = id => 'https://drive.google.com/thumbnail?id='+id+'&sz=w2000';
 let offRun=false, offT=null, offMsg='';
 function offloadSoon(ms){ clearTimeout(offT); offT=setTimeout(offload, ms==null?1500:ms) }
 async function offload(){
-  if(offRun || ro || locked || !serverOn() || !deptName()) return;
+  if(offRun || ro || locked || verifying || !serverOn() || !deptName()) return;
   offRun=true;
   let moved=0, memoMoved=false;
   try{
@@ -3206,8 +3260,8 @@ function bindCover(){
   if($('#lgCopy')) $('#lgCopy').onclick=()=>copyText(serverUrlHome(),'주소를 복사했습니다.');
   if($('#lgRefresh')) $('#lgRefresh').onclick=async()=>{
     cvBusy=true; selFile=''; render();
-    await Promise.all([loadDeptList(), loadUsers()]);
-    await saveCache(); cvBusy=false; render();
+    await loadBoot();
+    await saveCache(); cvBusy=false; autoPick(); render();
   };
   if($('#lgNew')) $('#lgNew').onclick=()=>{
     let yr = new Date().getFullYear();
@@ -3232,7 +3286,15 @@ function bindCover(){
     const p=selFile.split('|');
     cvMsg='자료를 읽는 중입니다…'; render();
     try{
-      if(!listFresh) await loadDeptList();          // 목록부터 최신으로 맞춘다
+      const key=selFile;
+      const loc = await localRec(key);
+      if(loc && authRole==='home'){                 // 가계부 — 기기에 있던 것으로 바로 연다
+        S=norm(loc.rec.data); curFile=`${p[0]}_${p[1]}`; memoLoaded=false;
+        S.meta.dept=p[0]; S.meta.year=Number(p[1])||S.meta.year;
+        ro=false; guideMode='edit'; cvMsg=''; enterApp();
+        verifyOpen(key, loc.at);
+        return;
+      }
       const rec = (preKey===selFile && prePromise) ? (await prePromise) || (await getRec(selFile))
                                                   : (await getRec(selFile));
       S=norm(rec.data); curFile=`${p[0]}_${p[1]}`; memoLoaded=false;
@@ -3264,7 +3326,7 @@ function tryLogin(){
 }
 function enterApp(){
   locked = (authRole==='home');            // 가계부는 열람으로 시작
-  if(authRole==='home') setTimeout(()=>{ loadMemos(); loadPick(true); loadTodos(true) }, 0);
+  if(authRole==='home') setTimeout(()=>{ loadTodos(true); setTimeout(loadMemos, 1500) }, 0);   // 첨부 목록은 자료 탭을 열 때
   screen='app'; tab=(authRole==='home'?'todo':'guide'); per='Q1'; editId=null; srvMsg=''; mine=null;
   save(); render(); window.scrollTo(0,0);
 }
@@ -3272,7 +3334,8 @@ function exitApp(){
   if(dirty && !confirm('저장하지 않은 내용이 있습니다. 그래도 나갈까요?')) return;
   TODOS=[]; todoLoaded=false; todoMsg=''; screen='cover'; ro=false; roName=''; mine=null; guideMode='edit'; srvMsg=''; cvOpen=false; selFile=''; cvMsg=''; locked=false; authRole='home';
   preKey=''; prePromise=null; listFresh=false;
-  loadDeptList().then(()=>{ saveCache(); render() });
+  autoPick();                                       // 지난 목록으로 바로 골라 둔다
+  loadDeptList().then(()=>{ saveCache(); autoPick(); render() });
   render();
 }
 
@@ -3805,12 +3868,12 @@ function readOldExcel(wb){
   setStatus(serverOn()?'서버 연결됨':'임시 보관됨');
   render();
   const had = await loadCache();            // 지난번 목록을 먼저 보여 준다
-  if(had){ cvBusy=false; render() }
+  if(had){ cvBusy=false; autoPick(); render() }
   try{
-    await Promise.all([loadDeptList(), loadUsers()]);   // 두 요청을 겹쳐 보낸다
+    await loadBoot();                                  // 목록·명단을 한 번에
     await saveCache();
   }catch(e){}
-  cvBusy=false; render();
+  cvBusy=false; autoPick(); render();
   checkUpdate(false);
   loadXLSX().then(prepShare).catch(function(){});   // 저장·공유가 바로 되도록 미리 준비
   offloadSoon(8000);                                 // 장부 안에 남은 사진이 있으면 천천히 옮긴다
