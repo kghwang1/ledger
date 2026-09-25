@@ -694,7 +694,7 @@ function setStatus(t){ const el=document.getElementById('hSt'); if(el) el.textCo
 window.addEventListener('beforeunload', e=>{ if(dirty){ e.preventDefault(); e.returnValue='' } });
 
 /* ───────── 서버(공유) 저장 ───────── */
-const APPVER = 'H2.8';
+const APPVER = 'H2.9';
 const LIBKEY = 'church_ledger_lib_v1';
 const DATASHEET = '_data', DATATAG = 'CHURCH_LEDGER_V1';
 const XLSXMIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -1176,7 +1176,7 @@ function orphanCount(){
 }
 
 /* ───────── 렌더 ───────── */
-const TABS = [['guide','안내'],['budget','예산'],['ledger','출납부'],['settle','결산'],['next','새해예산요구'],['plan','지출예정'],['memo','자료'],['data','⚙']];
+const TABS = [['todo','할일'],['guide','안내'],['budget','예산'],['ledger','출납부'],['settle','결산'],['next','새해예산요구'],['plan','지출예정'],['memo','자료'],['data','⚙']];
 function render(){
   const hd=document.querySelector('header');
   if(screen==='cover'){
@@ -1189,6 +1189,7 @@ function render(){
   if(hd) hd.style.display='';
   if(tab==='next' && authRole==='home') tab='guide';
   if(tab==='memo' && authRole!=='home') tab='guide';
+  if(tab==='todo' && (authRole!=='home' || ro)) tab='guide';
   if(tab==='guide' && authRole==='home') tab='settle';
   if(balanceReserve()) save();                       // 예비비는 늘 수입 계에 맞춰 둔다 (잠금 중이면 화면에만)
   const hT=document.getElementById('hTitle');
@@ -1207,7 +1208,8 @@ function render(){
     TABS.filter(([k])=>!(k==='data' && (guideMode==='view'||ro))
                     && !(k==='next' && authRole==='home')
                     && !(k==='guide' && authRole==='home')
-                    && !(k==='memo' && authRole!=='home'))
+                    && !(k==='memo' && authRole!=='home')
+                    && !(k==='todo' && (authRole!=='home' || ro)))
         .map(([k,l])=>`<button data-tab="${k}" class="${tab===k?'on':''}">${l}</button>`).join('')
     ;
   document.getElementById('hSave').innerHTML =
@@ -1231,12 +1233,13 @@ function render(){
     : (srvMsg? `<div class="robar no-print" style="background:var(--in-bg);border-color:#cfe6da;color:#1d6b4f">${esc(srvMsg)}</div>`:'');
 
   document.getElementById('view').innerHTML = upd + banner +
-    ({guide:vGuide,budget:vBudget,ledger:vLedger,settle:vSettle,next:vNext,plan:vPlan,memo:vMemo,data:vData,browse:vBrowse,print:vPrint})[tab]();
+    ({todo:vTodo,guide:vGuide,budget:vBudget,ledger:vLedger,settle:vSettle,next:vNext,plan:vPlan,memo:vMemo,data:vData,browse:vBrowse,print:vPrint})[tab]();
   document.querySelectorAll('#nav button[data-tab]').forEach(b=>b.onclick=()=>{
     const k=b.dataset.tab;
     if(k==='plan' && tab!=='plan'){ planEdit=null; planImg=''; planDraft=null; planOpen=true }
     if(k!=='memo' && memoPending() &&
        !confirm('자료 탭에 아직 [완료]를 누르지 않은 입력이 있습니다.\n다른 탭으로 가면 사라집니다. 계속할까요?')) return;
+    if(k==='todo' && tab!=='todo') loadTodos();
     if(k==='memo' && tab!=='memo'){ memoEdit=null; memoImgs=[]; memoDraft=null; memoOpen=true; pickMsg=''; loadMemos(); loadPick(true) }
     if(k==='ledger' && tab!=='ledger'){                 // 출납부를 열면 오늘 날짜의 분기·달로
       const t=todayPeriod();
@@ -1405,10 +1408,11 @@ function render(){
   document.getElementById('deptFiles').onchange = e=>{ openDeptFiles(e.target.files); e.target.value='' };
   document.getElementById('myFile').onchange = e=>{ if(e.target.files[0]) openMyFile(e.target.files[0]); e.target.value='' };
   bind();
+  if(tab==='todo') bindTodo();
 
   if(ro || locked){                         // 열람 모드: 모든 입력 잠금 + 편집 버튼 숨김
     document.querySelectorAll('#view input,#view select,#view textarea')
-      .forEach(el=>{ if(!el.hasAttribute('data-vfile')) el.disabled=true });   // 열람 목록은 계속 고를 수 있게
+      .forEach(el=>{ if(!el.hasAttribute('data-vfile') && !el.hasAttribute('data-free')) el.disabled=true });   // 열람 목록은 계속 고를 수 있게
     document.querySelectorAll('#view .no-ro').forEach(el=>el.style.display='none');
   }
   if(focusType){
@@ -1689,6 +1693,138 @@ function openBox(){
     <button class="btn sm" id="openGo">불러오기</button>
     <button class="btn g sm" id="openNo">취소</button>
     <div class="hint" style="width:100%;margin:4px 0 0">${esc(nm)} 자료를 불러옵니다. 파일에 적힌 부서명과 같아야 열립니다.</div></div>`;
+}
+
+/* ── 할일 ──
+   메모(할 일)는 장부와 따로 드라이브 `_todo_<구분>_0.json` 에 보관한다.
+   열람(잠김) 상태에서도 체크·추가할 수 있다. */
+let TODOS=[], todoLoaded=false, todoMsg='', todoT=null, todoRun=null, todoAgain=false;
+function todoKey(){ return '_todo_' + deptName() }
+function todoLocal(){ return 'ledger_todo_' + deptName() }
+function normTodo(a){ return (a||[]).map(t=>({id:t.id||uid(), text:String(t.text||''), date:t.date||'', done:!!t.done, doneAt:t.doneAt||''})) }
+async function loadTodos(force){
+  if(!deptName()) return;
+  if(!todoLoaded || force){
+    try{ const v=await store.get(todoLocal()); if(v) TODOS=normTodo(JSON.parse(v)) }catch(e){}
+  }
+  if(!serverOn()){ todoLoaded=true; if(tab==='todo') render(); return }
+  try{
+    const j = await api('get', {name:todoKey(), year:0});
+    const got = (j.rec && j.rec.data && j.rec.data.todos) || null;
+    if(got) TODOS = normTodo(got);
+    try{ await store.set(todoLocal(), JSON.stringify(TODOS)) }catch(e){}
+  }catch(e){                                          // 서버에 파일이 아직 없을 때만 기기에 있던 것을 올린다
+    if(TODOS.length && /찾지 못했습니다/.test(String(e&&e.message))) pushTodos();
+  }
+  todoLoaded=true; if(tab==='todo') render();
+}
+function todoChanged(){                               // 기기에 바로, 서버에는 잠시 뒤
+  try{ store.set(todoLocal(), JSON.stringify(TODOS)) }catch(e){}
+  todoMsg='저장 대기 중…';
+  clearTimeout(todoT); todoT=setTimeout(pushTodos, 1200);
+  render();
+}
+async function pushTodos(){
+  clearTimeout(todoT);
+  if(!serverOn() || !deptName()){ todoMsg='기기에 보관됨 · '+nowT(); if(tab==='todo') render(); return true }
+  if(todoRun){ todoAgain=true; return todoRun }
+  todoRun=(async()=>{
+    let ok=true;
+    do{
+      todoAgain=false;
+      try{ await api('save', {name:todoKey(), year:0, data:{todos:TODOS}}); todoMsg='저장됨 · '+nowT() }
+      catch(e){ ok=false; todoMsg='⚠ 저장 실패 — [저장]을 다시 눌러 주세요'; break }
+    }while(todoAgain);
+    return ok;
+  })();
+  try{ return await todoRun }finally{ todoRun=null; if(tab==='todo') render() }
+}
+const WK=['일','월','화','수','목','금','토'];
+function nowLabel(){
+  const d=new Date(), h=d.getHours();
+  return `${d.getFullYear()}년 ${d.getMonth()+1}월 ${d.getDate()}일 (${WK[d.getDay()]}) ${h<12?'AM':'PM'} ${(h%12)||12}:${String(d.getMinutes()).padStart(2,'0')}`;
+}
+function mdLabel(iso){ if(!iso) return ''; const d=new Date(iso+'T00:00:00'); return `${d.getMonth()+1}/${d.getDate()}(${WK[d.getDay()]})` }
+setInterval(()=>{ const c=document.getElementById('tdClock'); if(c) c.textContent=nowLabel() }, 15000);
+
+function vTodo(){
+  const t = todayISO();
+  const plans = (S.plan||[]).filter(e=>e.date===t);
+  const pT = plans.reduce((a,e)=>a+Math.abs(+e.amount||0),0);
+  const todayT = TODOS.filter(x=>x.date===t);
+  const late = TODOS.filter(x=>!x.done && x.date && x.date<t);
+  const open = TODOS.filter(x=>!x.done).sort((a,b)=>(a.date||'9999').localeCompare(b.date||'9999'));
+  const done = TODOS.filter(x=>x.done).sort((a,b)=>(b.doneAt||'').localeCompare(a.doneAt||''));
+  const chk = x=>`<input type="checkbox" data-free data-tchk="${x.id}" ${x.done?'checked':''} style="width:18px;height:18px">`;
+  const line = x=>`<span style="${x.done?'text-decoration:line-through;color:var(--mute)':''}">${esc(x.text)||'<span style="color:var(--mute)">(내용 없음)</span>'}</span>`;
+  const row = x=>`<tr data-trow="${x.id}">
+      <td class="c" style="width:34px">${chk(x)}</td>
+      <td style="width:150px"><input type="date" data-free data-tdate="${x.id}" value="${esc(x.date)}"></td>
+      <td><input type="text" data-free data-ttext="${x.id}" value="${esc(x.text)}" placeholder="할 일" style="${x.done?'text-decoration:line-through;color:var(--mute)':''}"></td>
+      <td class="c" style="width:44px"><button class="btn dg sm" data-tdel="${x.id}" title="삭제">×</button></td></tr>`;
+  return `
+  <div class="card" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+    <div style="font-size:13px;color:var(--mute)">오늘 날짜</div>
+    <div id="tdClock" style="font-size:18px;font-weight:700">${nowLabel()}</div>
+    <div style="margin-left:auto;display:flex;align-items:center;gap:10px">
+      <span class="hint" style="margin:0">${esc(todoMsg)}</span>
+      <button class="btn" id="tdSave">저장</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2 style="font-size:15px">오늘 할 일</h2>
+    <div style="font-size:13px;color:var(--mute);margin:6px 0 4px">지출 예정</div>
+    ${plans.length ? `<table class="ws"><tbody>
+        ${plans.map(e=>`<tr><td>${esc(e.cat)}</td><td>${esc(e.note||'')}</td><td class="n out">${won(Math.abs(+e.amount||0))}</td></tr>`).join('')}
+        ${plans.length>1?`<tr class="tot"><td colspan="2">계</td><td class="n out">${won(pT)}</td></tr>`:''}
+      </tbody></table>` : `<p class="hint" style="margin:0 0 6px">오늘 지출 예정이 없습니다.</p>`}
+    <div style="font-size:13px;color:var(--mute);margin:14px 0 4px">메모</div>
+    ${todayT.length||late.length ? `<div style="display:flex;flex-direction:column;gap:6px">
+        ${todayT.map(x=>`<label style="display:flex;gap:8px;align-items:center">${chk(x)} ${line(x)}</label>`).join('')}
+        ${late.map(x=>`<label style="display:flex;gap:8px;align-items:center">${chk(x)} ${line(x)} <span class="badge b-w">밀림 ${mdLabel(x.date)}</span></label>`).join('')}
+      </div>` : `<p class="hint" style="margin:0">오늘 날짜로 적어 둔 메모가 없습니다.</p>`}
+  </div>
+
+  <div class="card">
+    <h2 style="font-size:15px">메모</h2>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 12px">
+      <input type="date" id="tdNewDate" data-free value="${t}" style="width:150px">
+      <input type="text" id="tdNewText" data-free placeholder="할 일을 적고 Enter" style="flex:1;min-width:180px">
+      <button class="btn" id="tdAdd">추가</button>
+    </div>
+    <table class="ws"><thead><tr><th class="c">✓</th><th>완료일</th><th>내용</th><th class="c">삭제</th></tr></thead>
+      <tbody>
+        ${open.map(row).join('') || `<tr><td colspan="4" class="hint" style="text-align:center">남은 할 일이 없습니다.</td></tr>`}
+        ${done.length ? `<tr><td colspan="4" style="background:var(--bg);font-size:12px;color:var(--mute);padding-top:10px">완료 ${done.length}건</td></tr>${done.map(row).join('')}` : ''}
+      </tbody></table>
+    <p class="hint" style="margin-top:10px">체크하면 줄이 그어지고 아래 <b>완료</b>로 내려갑니다. 완료일을 적어 두면 그날 위 <b>오늘 할 일</b>에 나타납니다.</p>
+  </div>`;
+}
+function bindTodo(){
+  const find = id=>TODOS.find(x=>x.id===id);
+  const add = ()=>{
+    const tx=document.getElementById('tdNewText'), dt=document.getElementById('tdNewDate');
+    const v=(tx.value||'').trim(); if(!v){ tx.focus(); return }
+    TODOS.unshift({id:uid(), text:v, date:dt.value||'', done:false, doneAt:''});
+    todoChanged();
+    const n=document.getElementById('tdNewText'); if(n) n.focus();
+  };
+  const ab=document.getElementById('tdAdd'); if(ab) ab.onclick=add;
+  const nt=document.getElementById('tdNewText'); if(nt) nt.onkeydown=e=>{ if(e.key==='Enter' && !e.isComposing){ e.preventDefault(); add() } };
+  const sb=document.getElementById('tdSave'); if(sb) sb.onclick=async()=>{ sb.disabled=true; sb.textContent='저장 중…'; await pushTodos() };
+  document.querySelectorAll('[data-tchk]').forEach(el=>el.onchange=()=>{
+    const x=find(el.dataset.tchk); if(!x) return;
+    x.done=el.checked; x.doneAt = el.checked? todayISO() : '';
+    todoChanged();
+  });
+  document.querySelectorAll('[data-tdate]').forEach(el=>el.onchange=()=>{ const x=find(el.dataset.tdate); if(x){ x.date=el.value; todoChanged() } });
+  document.querySelectorAll('[data-ttext]').forEach(el=>el.onchange=()=>{ const x=find(el.dataset.ttext); if(x){ x.text=el.value.trim(); todoChanged() } });
+  document.querySelectorAll('[data-tdel]').forEach(el=>el.onclick=()=>{
+    const x=find(el.dataset.tdel); if(!x) return;
+    if(!confirm(`"${x.text||'(내용 없음)'}" 을(를) 지울까요?`)) return;
+    TODOS=TODOS.filter(y=>y!==x); todoChanged();
+  });
 }
 
 /* ── 안내 ── */
@@ -3134,13 +3270,13 @@ function tryLogin(){
 }
 function enterApp(){
   locked = (authRole==='home');            // 가계부는 열람으로 시작
-  if(authRole==='home') setTimeout(()=>{ loadMemos(); loadPick(true) }, 0);
+  if(authRole==='home') setTimeout(()=>{ loadMemos(); loadPick(true); loadTodos(true) }, 0);
   screen='app'; tab=(authRole==='home'?'settle':'guide'); per='Q1'; editId=null; srvMsg=''; mine=null;
   save(); render(); window.scrollTo(0,0);
 }
 function exitApp(){
   if(dirty && !confirm('저장하지 않은 내용이 있습니다. 그래도 나갈까요?')) return;
-  screen='cover'; ro=false; roName=''; mine=null; guideMode='edit'; srvMsg=''; cvOpen=false; selFile=''; cvMsg=''; locked=false; authRole='home';
+  TODOS=[]; todoLoaded=false; todoMsg=''; screen='cover'; ro=false; roName=''; mine=null; guideMode='edit'; srvMsg=''; cvOpen=false; selFile=''; cvMsg=''; locked=false; authRole='home';
   preKey=''; prePromise=null; listFresh=false;
   loadDeptList().then(()=>{ saveCache(); render() });
   render();
