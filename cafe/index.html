@@ -58,8 +58,8 @@ body.viewing .seg button.on{background:#6e2233}
   padding:10px 14px;margin-bottom:14px;font-size:13px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 tr.hl td{background:#fff4c9!important;transition:background 1.6s}
 main{padding-top:20px}
-.today-card table td, .today-card label, .today-card label span{color:#8b1a1a!important}
-.today-card input[type=checkbox]{accent-color:#8b1a1a}
+.today-card table td, .today-card label, .today-card label span{color:#0b2a6b!important}
+.today-card input[type=checkbox]{accent-color:#0b2a6b}
 .card{background:var(--paper);border:1px solid var(--line);border-radius:var(--r);padding:18px;margin-bottom:16px}
 .card>h2{margin:0 0 4px;font-size:16px;letter-spacing:-.01em}
 .card>h2+.hint{margin-top:0}
@@ -696,7 +696,7 @@ function setStatus(t){ const el=document.getElementById('hSt'); if(el) el.textCo
 window.addEventListener('beforeunload', e=>{ if(dirty){ e.preventDefault(); e.returnValue='' } });
 
 /* ───────── 서버(공유) 저장 ───────── */
-const APPVER = 'H3.1';
+const APPVER = 'H3.2';
 const LIBKEY = 'church_ledger_lib_v1';
 const DATASHEET = '_data', DATATAG = 'CHURCH_LEDGER_V1';
 const XLSXMIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -1755,8 +1755,9 @@ function vTodo(){
   const pT = plans.reduce((a,e)=>a+Math.abs(+e.amount||0),0);
   const todayT = TODOS.filter(x=>x.date===t);
   const late = TODOS.filter(x=>!x.done && x.date && x.date<t);
-  const open = TODOS.filter(x=>!x.done).sort((a,b)=>(a.date||'9999').localeCompare(b.date||'9999'));
-  const done = TODOS.filter(x=>x.done).sort((a,b)=>(b.doneAt||'').localeCompare(a.doneAt||''));
+  const inToday = x=> x.date===t || (!x.done && x.date && x.date<t);   // 오늘 할 일 카드에 올라간 것
+  const open = TODOS.filter(x=>!x.done && !inToday(x)).sort((a,b)=>(a.date||'9999').localeCompare(b.date||'9999'));
+  const done = TODOS.filter(x=>x.done && !inToday(x)).sort((a,b)=>(b.doneAt||'').localeCompare(a.doneAt||''));
   const chk = x=>`<input type="checkbox" data-free data-tchk="${x.id}" ${x.done?'checked':''} style="width:18px;height:18px">`;
   const line = x=>`<span style="${x.done?'text-decoration:line-through;opacity:.55':''}">${esc(x.text)||'<span style="color:var(--mute)">(내용 없음)</span>'}</span>`;
   const row = x=>`<tr data-trow="${x.id}">
@@ -1783,8 +1784,8 @@ function vTodo(){
       </tbody></table>` : `<p class="hint" style="margin:0 0 6px">오늘 지출 예정이 없습니다.</p>`}
     <div style="font-size:13px;color:var(--mute);margin:14px 0 4px">메모</div>
     ${todayT.length||late.length ? `<div style="display:flex;flex-direction:column;gap:6px">
-        ${todayT.map(x=>`<label style="display:flex;gap:8px;align-items:center">${chk(x)} ${line(x)}</label>`).join('')}
-        ${late.map(x=>`<label style="display:flex;gap:8px;align-items:center">${chk(x)} ${line(x)} <span class="badge b-w">밀림 ${mdLabel(x.date)}</span></label>`).join('')}
+        ${todayT.slice().sort((a,b)=>a.done-b.done).map(x=>`<div style="display:flex;gap:8px;align-items:center"><label style="display:flex;gap:8px;align-items:center;flex:1">${chk(x)} ${line(x)}</label><button class="btn dg sm" data-tdel="${x.id}" title="삭제">×</button></div>`).join('')}
+        ${late.map(x=>`<div style="display:flex;gap:8px;align-items:center"><label style="display:flex;gap:8px;align-items:center;flex:1">${chk(x)} ${line(x)} <span class="badge b-w">밀림 ${mdLabel(x.date)}</span></label><button class="btn dg sm" data-tdel="${x.id}" title="삭제">×</button></div>`).join('')}
       </div>` : `<p class="hint" style="margin:0">오늘 날짜로 적어 둔 메모가 없습니다.</p>`}
   </div>
 
@@ -1797,10 +1798,10 @@ function vTodo(){
     </div>
     <table class="ws"><thead><tr><th class="c">✓</th><th>완료일</th><th>내용</th><th class="c">삭제</th></tr></thead>
       <tbody>
-        ${open.map(row).join('') || `<tr><td colspan="4" class="hint" style="text-align:center">남은 할 일이 없습니다.</td></tr>`}
+        ${open.map(row).join('') || `<tr><td colspan="4" class="hint" style="text-align:center">남은 메모가 없습니다.</td></tr>`}
         ${done.length ? `<tr><td colspan="4" style="background:var(--bg);font-size:12px;color:var(--mute);padding-top:10px">완료 ${done.length}건</td></tr>${done.map(row).join('')}` : ''}
       </tbody></table>
-    <p class="hint" style="margin-top:10px">체크하면 줄이 그어지고 아래 <b>완료</b>로 내려갑니다. 완료일을 적어 두면 그날 위 <b>오늘 할 일</b>에 나타납니다.</p>
+    <p class="hint" style="margin-top:10px">체크하면 줄이 그어지고 아래 <b>완료</b>로 내려갑니다. 완료일이 된 메모는 이 목록에서 빠지고 위 <b>오늘 할 일</b>로 옮겨 갑니다.</p>
   </div>`;
 }
 function bindTodo(){
@@ -3273,7 +3274,7 @@ function tryLogin(){
 function enterApp(){
   locked = (authRole==='home');            // 가계부는 열람으로 시작
   if(authRole==='home') setTimeout(()=>{ loadMemos(); loadPick(true); loadTodos(true) }, 0);
-  screen='app'; tab=(authRole==='home'?'settle':'guide'); per='Q1'; editId=null; srvMsg=''; mine=null;
+  screen='app'; tab=(authRole==='home'?'todo':'guide'); per='Q1'; editId=null; srvMsg=''; mine=null;
   save(); render(); window.scrollTo(0,0);
 }
 function exitApp(){
